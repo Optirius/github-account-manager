@@ -1,4 +1,4 @@
-﻿"""Application configuration and constants."""
+"""Application configuration and constants."""
 from pathlib import Path
 import os
 
@@ -19,10 +19,5 @@ DEFAULT_SSH_DIR.mkdir(parents=True, exist_ok=True)
 
 DEFAULT_GITCONFIG = Path.home() / ".gitconfig"
 
-# GitHub endpoints and OAuth/PAT helpers
+# GitHub endpoints
 GITHUB_API_BASE = "https://api.github.com"
-GITHUB_NEW_TOKEN_URL = (
-    "https://github.com/settings/tokens/new"
-    "?scopes=repo,read:user,user:email,admin:public_key"
-    "&description=GitHub%20Multi-Account%20Manager"
-)

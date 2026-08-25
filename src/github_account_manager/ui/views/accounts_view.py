@@ -11,7 +11,6 @@ from github_account_manager.ui.components.dialogs import (
     AddEditAccountDialog,
     ResultModalDialog,
     SSHTestGuideDialog,
-    TokenLoginDialog,
 )
 from github_account_manager.ui.components.info_banner import InfoBanner
 from github_account_manager.ui.theme import (
@@ -51,7 +50,7 @@ class AccountsView(ctk.CTkFrame):
 
         ctk.CTkLabel(
             title_box,
-            text="Manage Git identities, personal access tokens, and SSH keys for each profile.",
+            text="Manage Git identities, author emails, and SSH keys for each profile.",
             font=FONT_BODY,
             text_color=TEXT_SECONDARY,
         ).pack(anchor="w", pady=(3, 0))
@@ -114,10 +113,7 @@ class AccountsView(ctk.CTkFrame):
                 account=acc,
                 on_edit=self._open_edit_dialog,
                 on_delete=self._handle_delete,
-                on_login=self._open_login_dialog,
-                on_logout=self._handle_logout,
                 on_test_ssh=self._handle_test_ssh,
-                on_upload_ssh=self._handle_upload_ssh,
             )
             card.pack(fill="x", pady=6)
 
@@ -131,7 +127,6 @@ class AccountsView(ctk.CTkFrame):
                 git_name=data["git_name"],
                 username=data.get("username", ""),
                 ssh_key_path=data.get("ssh_key_path"),
-                token=data.get("token"),
             )
             self.on_notify("Account Created", f"Profile '{data['name']}' has been created.")
             self.refresh()
@@ -157,7 +152,6 @@ class AccountsView(ctk.CTkFrame):
                 git_name=data["git_name"],
                 username=data.get("username"),
                 ssh_key_path=data.get("ssh_key_path"),
-                token=data.get("token"),
             )
             self.on_notify("Account Updated", f"Profile '{data['name']}' updated.")
             self.refresh()
@@ -172,42 +166,6 @@ class AccountsView(ctk.CTkFrame):
     def _handle_delete(self, account: Account):
         self.manager.delete_account(account.id)
         self.on_notify("Account Removed", f"Profile '{account.name}' has been deleted.")
-        self.refresh()
-
-    def _open_login_dialog(self, account: Account):
-        dialog = None
-
-        def handle_token_submit(token: str):
-            def task():
-                return self.manager.login_with_token(account.id, token)
-
-            run_async(
-                self,
-                task_fn=task,
-                on_success=lambda res: self._on_login_finished(dialog, account, res),
-                loading_btn=dialog.submit_btn if dialog else None,
-                loading_text="⏳ Verifying...",
-                error_title="GitHub Login Error",
-            )
-
-        dialog = TokenLoginDialog(
-            self.winfo_toplevel(),
-            account_name=account.name,
-            on_login=handle_token_submit,
-        )
-
-    def _on_login_finished(self, dialog: TokenLoginDialog, account: Account, res: dict):
-        if res.get("success"):
-            dialog.destroy()
-            self.on_notify("Login Successful", f"Authenticated as @{res.get('username')}")
-            self.refresh()
-        else:
-            dialog.status_lbl.configure(text=f"Error: {res.get('error')}", text_color="#cf222e")
-            dialog.submit_btn.configure(state="normal", text="Verify & Login")
-
-    def _handle_logout(self, account: Account):
-        self.manager.logout_account(account.id)
-        self.on_notify("Logged Out", f"Cleared token for '{account.name}'.")
         self.refresh()
 
     def _handle_test_ssh(self, account: Account):
@@ -243,33 +201,4 @@ class AccountsView(ctk.CTkFrame):
             task_fn=task,
             on_success=on_done,
             error_title="SSH Connection Error",
-        )
-
-    def _handle_upload_ssh(self, account: Account):
-        self.on_notify("Uploading Key", f"Uploading public key to GitHub for '{account.name}'...")
-
-        def task():
-            return self.manager.upload_ssh_key_to_github(
-                account_id=account.id,
-                ssh_key_path=account.ssh_key_path or "",
-                title=f"MultiAccountManager - {account.name}",
-            )
-
-        def on_done(res):
-            is_success = res.get("success", False)
-            heading = "Key Uploaded to GitHub!" if is_success else "Upload Failed"
-            msg = f"Key ID: {res.get('key_id')}\nTitle: {res.get('title')}" if is_success else str(res.get("error"))
-            ResultModalDialog(
-                self.winfo_toplevel(),
-                title=f"GitHub SSH Upload - {account.name}",
-                heading=heading,
-                content=msg,
-                is_success=is_success,
-            )
-
-        run_async(
-            self,
-            task_fn=task,
-            on_success=on_done,
-            error_title="SSH Upload Error",
         )

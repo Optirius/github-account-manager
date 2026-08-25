@@ -35,10 +35,7 @@ class AccountCard(ctk.CTkFrame):
         account: Account,
         on_edit: Callable[[Account], None],
         on_delete: Callable[[Account], None],
-        on_login: Callable[[Account], None],
-        on_logout: Callable[[Account], None],
         on_test_ssh: Callable[[Account], None],
-        on_upload_ssh: Callable[[Account], None],
         **kwargs,
     ):
         super().__init__(
@@ -52,10 +49,7 @@ class AccountCard(ctk.CTkFrame):
         self.account = account
         self.on_edit = on_edit
         self.on_delete = on_delete
-        self.on_login = on_login
-        self.on_logout = on_logout
         self.on_test_ssh = on_test_ssh
-        self.on_upload_ssh = on_upload_ssh
 
         self._build_ui()
 
@@ -75,11 +69,6 @@ class AccountCard(ctk.CTkFrame):
         # Badges on right
         badge_box = ctk.CTkFrame(header, fg_color="transparent")
         badge_box.pack(side="right")
-
-        if self.account.is_authenticated:
-            StatusBadge(badge_box, "✓ PAT Active", "success").pack(side="left", padx=4)
-        else:
-            StatusBadge(badge_box, "No Token", "warning").pack(side="left", padx=4)
 
         if self.account.ssh_key_path:
             StatusBadge(badge_box, "SSH Linked", "info").pack(side="left", padx=4)
@@ -139,50 +128,6 @@ class AccountCard(ctk.CTkFrame):
             command=lambda: self.on_test_ssh(self.account),
         )
         test_ssh_btn.pack(side="left", padx=(0, 8))
-
-        # Upload Key to GitHub button (if authenticated and has key)
-        if self.account.is_authenticated and self.account.ssh_key_path:
-            upload_btn = ctk.CTkButton(
-                actions,
-                text="📤 Upload Key to GitHub",
-                width=160,
-                height=32,
-                font=FONT_SMALL,
-                fg_color=ACCENT_BLUE,
-                hover_color=ACCENT_BLUE_HOVER,
-                text_color="#ffffff",
-                command=lambda: self.on_upload_ssh(self.account),
-            )
-            upload_btn.pack(side="left", padx=(0, 8))
-
-        # Login / Logout button
-        if self.account.is_authenticated:
-            auth_btn = ctk.CTkButton(
-                actions,
-                text="🚪 Logout",
-                width=90,
-                height=32,
-                font=FONT_SMALL,
-                fg_color=BTN_SECONDARY_BG,
-                hover_color=ACCENT_RED,
-                text_color=BTN_SECONDARY_TEXT,
-                border_width=1,
-                border_color=BORDER_COLOR,
-                command=lambda: self.on_logout(self.account),
-            )
-        else:
-            auth_btn = ctk.CTkButton(
-                actions,
-                text="🌐 Login PAT",
-                width=100,
-                height=32,
-                font=FONT_SMALL,
-                fg_color=ACCENT_GREEN,
-                hover_color=ACCENT_GREEN_HOVER,
-                text_color="#ffffff",
-                command=lambda: self.on_login(self.account),
-            )
-        auth_btn.pack(side="left", padx=(0, 8))
 
         # Right side actions: Edit & Delete
         del_btn = ctk.CTkButton(

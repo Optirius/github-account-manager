@@ -27,8 +27,6 @@ class Account(BaseModel):
     email: str  # Git commit email
     git_name: str  # Git commit author name
     ssh_key_path: Optional[str] = None  # Absolute path to private key
-    avatar_url: Optional[str] = None
-    is_authenticated: bool = False  # Has valid GitHub PAT in secure keyring (never store token here)
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
 
     @field_validator("name", "git_name", "username", mode="before")

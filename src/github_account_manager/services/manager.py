@@ -9,7 +9,6 @@ from github_account_manager.models import Account, AppSettings, FolderMapping, S
 from github_account_manager.services.app_integration_service import AppIntegrationService
 from github_account_manager.services.git_service import GitService
 from github_account_manager.services.github_service import GitHubService
-from github_account_manager.services.keyring_service import KeyringService
 from github_account_manager.services.ssh_service import SSHService
 
 logger = logging.getLogger(__name__)
@@ -27,7 +26,6 @@ class AccountManager:
         self.git_service = GitService(gitconfig_path or DEFAULT_GITCONFIG, home_dir=home_override)
         self.ssh_service = SSHService(ssh_dir or DEFAULT_SSH_DIR)
         self.github_service = GitHubService()
-        self.keyring_service = KeyringService()
         self.app_service = AppIntegrationService()
         self.settings = self.load_settings()
 
@@ -118,8 +116,6 @@ class AccountManager:
         git_name: str,
         username: str = "",
         ssh_key_path: Optional[str] = None,
-        avatar_url: Optional[str] = None,
-        token: Optional[str] = None,
     ) -> Account:
         """Add a new account profile."""
         account = Account(
@@ -128,14 +124,8 @@ class AccountManager:
             git_name=git_name.strip(),
             username=username.strip(),
             ssh_key_path=ssh_key_path.strip() if ssh_key_path else None,
-            avatar_url=avatar_url,
-            is_authenticated=bool(token),
         )
         self.settings.accounts.append(account)
-
-        if token:
-            self.keyring_service.save_token(account.id, token.strip())
-
         self.save_settings()
         return account
 
@@ -147,8 +137,6 @@ class AccountManager:
         git_name: Optional[str] = None,
         username: Optional[str] = None,
         ssh_key_path: Optional[str] = None,
-        avatar_url: Optional[str] = None,
-        token: Optional[str] = None,
     ) -> Optional[Account]:
         """Update account properties."""
         acc = next((a for a in self.settings.accounts if a.id == account_id), None)
@@ -165,27 +153,16 @@ class AccountManager:
             acc.username = username.strip()
         if ssh_key_path is not None:
             acc.ssh_key_path = ssh_key_path.strip() if ssh_key_path else None
-        if avatar_url is not None:
-            acc.avatar_url = avatar_url
-
-        if token is not None:
-            if token.strip():
-                self.keyring_service.save_token(acc.id, token.strip())
-                acc.is_authenticated = True
-            else:
-                self.keyring_service.delete_token(acc.id)
-                acc.is_authenticated = False
 
         self.save_settings()
         return acc
 
     def delete_account(self, account_id: str) -> bool:
-        """Delete an account, associated tokens, and its folder mappings."""
+        """Delete an account and its folder mappings."""
         acc = next((a for a in self.settings.accounts if a.id == account_id), None)
         if not acc:
             return False
 
-        self.keyring_service.delete_token(acc.id)
         self.git_service.remove_account_profile_config(acc)
 
         self.settings.accounts = [a for a in self.settings.accounts if a.id != account_id]
@@ -195,46 +172,6 @@ class AccountManager:
 
         self.save_settings()
         return True
-
-    def login_with_token(self, account_id: str, token: str) -> Dict[str, Any]:
-        """Validate token with GitHub API, save to keyring, and update account profile."""
-        acc = next((a for a in self.settings.accounts if a.id == account_id), None)
-        if not acc:
-            return {"success": False, "error": "Account not found."}
-
-        res = self.github_service.validate_token(token)
-        if not res.get("success"):
-            return res
-
-        # Update account profile from GitHub API data
-        acc.is_authenticated = True
-        if res.get("username"):
-            acc.username = res["username"]
-        if res.get("avatar_url"):
-            acc.avatar_url = res["avatar_url"]
-        if res.get("email") and not acc.email:
-            acc.email = res["email"]
-        if res.get("name") and not acc.git_name:
-            acc.git_name = res["name"]
-
-        self.keyring_service.save_token(acc.id, token.strip())
-        self.save_settings()
-        return res
-
-    def logout_account(self, account_id: str) -> bool:
-        """Clear token from keyring and mark unauthenticated."""
-        acc = next((a for a in self.settings.accounts if a.id == account_id), None)
-        if not acc:
-            return False
-
-        self.keyring_service.delete_token(acc.id)
-        acc.is_authenticated = False
-        self.save_settings()
-        return True
-
-    def get_token(self, account_id: str) -> Optional[str]:
-        """Get stored PAT for an account."""
-        return self.keyring_service.get_token(account_id)
 
     # --- Folder Mappings ---
 
@@ -287,23 +224,6 @@ class AccountManager:
         return best_match
 
     # --- SSH & GitHub Integration ---
-
-    def upload_ssh_key_to_github(
-        self,
-        account_id: str,
-        ssh_key_path: str,
-        title: str = "GitHub Multi-Account Manager Key",
-    ) -> Dict[str, Any]:
-        """Read public key and upload directly to GitHub using account's PAT."""
-        token = self.get_token(account_id)
-        if not token:
-            return {"success": False, "error": "Account is not logged in with a GitHub Personal Access Token."}
-
-        pub_content = self.ssh_service.read_public_key(ssh_key_path)
-        if not pub_content:
-            return {"success": False, "error": f"Public key file (.pub) not found for: {ssh_key_path}"}
-
-        return self.github_service.upload_ssh_key(token, title, pub_content)
 
     def test_ssh_for_account(self, account_id: str) -> Tuple[bool, str, Optional[str]]:
         """Test SSH connection for a given account's configured SSH key."""

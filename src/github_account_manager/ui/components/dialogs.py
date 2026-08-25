@@ -6,7 +6,7 @@ import webbrowser
 from typing import Callable, List, Optional, Tuple
 import customtkinter as ctk
 
-from github_account_manager.config import DEFAULT_SSH_DIR, GITHUB_NEW_TOKEN_URL
+from github_account_manager.config import DEFAULT_SSH_DIR
 from github_account_manager.models import Account, SSHKeyInfo
 from github_account_manager.ui.theme import (
     ACCENT_BLUE,
@@ -56,102 +56,7 @@ class BaseDialog(ctk.CTkToplevel):
             pass
 
 
-class TokenLoginDialog(BaseDialog):
-    def __init__(self, parent, account_name: str, on_login: Callable[[str], None]):
-        super().__init__(parent, f"GitHub Login - {account_name}", 560, 430)
-        self.on_login = on_login
 
-        container = ctk.CTkFrame(self, fg_color="transparent")
-        container.pack(fill="both", expand=True, padx=25, pady=25)
-
-        title_lbl = ctk.CTkLabel(
-            container,
-            text=f"Authenticate '{account_name}'",
-            font=FONT_HEADING,
-            text_color=TEXT_PRIMARY,
-        )
-        title_lbl.pack(anchor="w", pady=(0, 8))
-
-        desc_lbl = ctk.CTkLabel(
-            container,
-            text="Enter a GitHub Personal Access Token (classic or fine-grained).\n"
-                 "Tokens are stored securely in Windows Credential Manager.",
-            font=FONT_BODY,
-            text_color=TEXT_SECONDARY,
-            justify="left",
-        )
-        desc_lbl.pack(anchor="w", pady=(0, 15))
-
-        ctk.CTkLabel(container, text="Personal Access Token (PAT):", font=FONT_BODY_BOLD, text_color=TEXT_PRIMARY).pack(anchor="w", pady=(5, 4))
-        self.token_entry = ctk.CTkEntry(
-            container,
-            placeholder_text="ghp_xxxxxxxxxxxxxxxxxxxx",
-            show="*",
-            font=FONT_MONO,
-            height=38,
-        )
-        self.token_entry.pack(fill="x", pady=(0, 10))
-
-        def open_token_url():
-            webbrowser.open_new_tab(GITHUB_NEW_TOKEN_URL)
-
-        gen_btn = ctk.CTkButton(
-            container,
-            text="🔗 Open GitHub to Generate Token (Pre-configured scopes)",
-            fg_color=BTN_SECONDARY_BG,
-            border_width=1,
-            border_color=BORDER_COLOR,
-            text_color=ACCENT_BLUE,
-            hover_color=BTN_SECONDARY_HOVER,
-            command=open_token_url,
-            height=34,
-            font=FONT_SMALL,
-        )
-        gen_btn.pack(fill="x", pady=(0, 15))
-
-        self.status_lbl = ctk.CTkLabel(container, text="", font=FONT_BODY, text_color=TEXT_MUTED)
-        self.status_lbl.pack(anchor="w", pady=(0, 10))
-
-        btn_row = ctk.CTkFrame(container, fg_color="transparent")
-        btn_row.pack(fill="x", side="bottom")
-
-        cancel_btn = ctk.CTkButton(
-            btn_row,
-            text="Cancel",
-            fg_color=BTN_SECONDARY_BG,
-            hover_color=BTN_SECONDARY_HOVER,
-            text_color=BTN_SECONDARY_TEXT,
-            border_width=1,
-            border_color=BORDER_COLOR,
-            command=self.destroy,
-            width=100,
-            height=36,
-            font=FONT_BODY,
-        )
-        cancel_btn.pack(side="left")
-
-        self.submit_btn = ctk.CTkButton(
-            btn_row,
-            text="Verify & Login",
-            fg_color=ACCENT_GREEN,
-            hover_color=ACCENT_GREEN_HOVER,
-            text_color="#ffffff",
-            command=self._handle_submit,
-            width=140,
-            height=36,
-            font=FONT_BODY_BOLD,
-        )
-        self.submit_btn.pack(side="right")
-
-    def _handle_submit(self):
-        token = self.token_entry.get().strip()
-        if not token:
-            self.status_lbl.configure(text="Please enter a token.", text_color=ACCENT_RED)
-            return
-
-        self.status_lbl.configure(text="Validating token with GitHub API...", text_color=ACCENT_BLUE)
-        self.submit_btn.configure(state="disabled")
-        self.on_login(token)
 
 
 class AddEditAccountDialog(BaseDialog):
@@ -195,7 +100,7 @@ class AddEditAccountDialog(BaseDialog):
 
             ctk.CTkLabel(
                 autofill_card,
-                text="Enter an Email, GitHub Username (@handle), or Personal Access Token.",
+                text="Enter an Email or GitHub Username (@handle) to auto-fill.",
                 font=FONT_SMALL,
                 text_color=TEXT_SECONDARY,
             ).pack(anchor="w", padx=16, pady=(0, 10))
@@ -205,7 +110,7 @@ class AddEditAccountDialog(BaseDialog):
 
             self.search_entry = ctk.CTkEntry(
                 search_row,
-                placeholder_text="e.g. user@gmail.com, octocat, or ghp_...",
+                placeholder_text="e.g. user@gmail.com or octocat",
                 font=FONT_BODY,
                 height=36,
             )
@@ -380,9 +285,6 @@ class AddEditAccountDialog(BaseDialog):
             if matched_key:
                 self.ssh_combo.set(matched_key.name)
 
-            if res.get("token"):
-                self._token_to_save = res["token"]
-
             msg = f"✓ Found GitHub profile: @{res.get('username') or res.get('name')}"
             self.status_lbl.configure(text=msg, text_color=ACCENT_GREEN)
         else:
@@ -427,20 +329,12 @@ class AddEditAccountDialog(BaseDialog):
             else:
                 ssh_key_path = selected_key
 
-        token = getattr(self, "_token_to_save", None)
-        search_field = getattr(self, "search_entry", None)
-        if not token and search_field:
-            s_val = search_field.get().strip()
-            if s_val.startswith("ghp_") or s_val.startswith("github_pat_"):
-                token = s_val
-
         data = {
             "name": name,
             "git_name": git_name,
             "email": email,
             "username": username,
             "ssh_key_path": ssh_key_path,
-            "token": token,
         }
 
         if self.on_save:

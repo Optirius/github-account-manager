@@ -2,7 +2,7 @@
 
 A secure, modern desktop GUI application built with **Python 3.12+**, **uv**, and **CustomTkinter** for seamless management of multiple GitHub accounts across different directories (e.g., Personal, Work, Freelance, or Client projects) on Windows.
 
-Eliminates cross-account permission collisions, IDE account hijacking (VS Code, Cursor), and corporate firewall blocks once and for all.
+Eliminates cross-account permission collisions, IDE account hijacking (VS Code, Cursor), and corporate firewall blocks without requiring any personal access tokens.
 
 ---
 
@@ -10,10 +10,11 @@ Eliminates cross-account permission collisions, IDE account hijacking (VS Code, 
 
 * **📂 Automatic Directory Routing (includeIf)**: Repositories in D:/Personal automatically commit as your personal account; repositories in D:/Professional automatically commit as your work account.
 * **🛡️ External IDE & App Isolation**: Prevents VS Code and Cursor from injecting their logged-in GitHub account into your Git repositories with 1-click isolation (github.gitAuthentication: false).
-* **🔑 SSH Port 443 & Firewall Bypass**: Automatically routes SSH connections through ssh.github.com:443 with IdentitiesOnly yes, bypassing corporate firewall port 22 blocks and strict identity collisions.
-* **🔄 HTTPS ➔ SSH Protocol Converter**: 1-click scanner and converter that maps repositories to their dedicated profile SSH aliases (e.g. git@github-personal:owner/repo.git).
-* **🔐 Windows Credential Vault Manager**: Inspects and clears cached global tokens (git:https://github.com) from Windows Credential Manager.
-* **⚡ Non-Blocking Async UI**: Powered by a dedicated background task runner with dynamic button loaders (⏳ Testing..., ⏳ Converting...) and rich error modal windows.
+* **🔑 Tokenless SSH Key Architecture**: Works 100% via dedicated ED25519 SSH keys. No Personal Access Tokens (PATs) or token expiration to worry about.
+* **⚡ SSH Port 443 & Firewall Bypass**: Automatically routes SSH connections through ssh.github.com:443 with IdentitiesOnly yes, bypassing corporate firewall port 22 blocks and strict identity collisions.
+* **🔄 HTTPS ➔ SSH Protocol Converter**: 1-click scanner and converter that maps repositories to their dedicated profile SSH keys.
+* **🧹 Windows Credential Vault Manager**: Inspects and clears cached global tokens (git:https://github.com) from Windows Credential Manager.
+* **⚡ Non-Blocking Async UI**: Powered by a background task runner with real-time button loaders (⏳ Testing..., ⏳ Scanning..., ⏳ Converting...) and rich error modal windows.
 * **💡 In-App Contextual Guidance**: Every section features built-in explainers detailing **What it does**, **Why it's needed**, and **How it works**.
 
 ---
@@ -22,7 +23,7 @@ Eliminates cross-account permission collisions, IDE account hijacking (VS Code, 
 
 ### 1. 👤 Account Profiles & Git Identities
 - Store multiple independent profiles with custom **Git Author Names**, **Commit Emails**, and **GitHub Handles**.
-- Search and auto-fill profile info from GitHub using an Email, Username (@octocat), or Personal Access Token (PAT).
+- Auto-fill profile info from GitHub using an Email or Username (@octocat).
 - Generates isolated ~/.gitconfig-<profile> configuration files with atomic file replacement.
 
 ### 2. 📁 Workspace Directory Mappings
@@ -32,7 +33,6 @@ Eliminates cross-account permission collisions, IDE account hijacking (VS Code, 
 ### 3. 🔑 Complete SSH Key Lifecycle Manager
 - **Discovery**: Automatically discovers all RSA and ED25519 keys in ~/.ssh/.
 - **Generation**: Generate new high-security **ED25519** (or RSA 4096-bit) key pairs with optional passphrases in one click.
-- **1-Click GitHub Upload**: Directly upload public keys to your GitHub account via REST API without opening a browser.
 - **Live Connection Testing**: Test live SSH authentication against GitHub (ssh -T) with interactive in-app setup guides.
 - **Safe Deletion Guard**: Tests keys before deletion—if a key is still active on GitHub, deletion is blocked with a direct revocation link.
 
@@ -103,8 +103,7 @@ github-multi-account-manager/
 │       ├── services/
 │       │   ├── git_service.py   # Git config includes, profiles, ~/.ssh/config & backups
 │       │   ├── ssh_service.py   # SSH key generation, discovery & live testing
-│       │   ├── github_service.py# GitHub REST API client (PAT auth & key uploads)
-│       │   ├── keyring_service.py # Windows Credential Vault / OS Keyring integration
+│       │   ├── github_service.py# GitHub REST API public search & discovery
 │       │   ├── app_integration_service.py # IDE isolation, cmdkey & repo scanner
 │       │   └── manager.py       # Core orchestrator coordinating state & sync
 │       └── ui/
@@ -116,38 +115,10 @@ github-multi-account-manager/
 │           │   ├── folder_row.py
 │           │   ├── info_banner.py
 │           │   ├── status_badge.py
-│           │   └── dialogs.py   # Login, SSH guides, Deletion guard & Error modals
+│           │   └── dialogs.py   # SSH guides, Deletion guard & Error modals
 │           └── views/           # Accounts, Folders, SSH, Apps, Inspector & Settings
-└── tests/                       # Complete pytest test suite (22 unit tests)
+└── tests/                       # Complete pytest test suite (19 unit tests)
 `
-
----
-
-## 🛠️ How It Solves Common Multi-Account Problems
-
-### Problem 1: VS Code Uses the Wrong Account for Commits / Pushes
-* **Cause**: VS Code has a built-in GitHub authentication provider (github.gitAuthentication: true) and Windows Credential Manager caches one global HTTPS token for git:https://github.com.
-* **Solution**:
-  1. Open **🧩 External Apps & Integrations** and click **"⚡ Apply Isolation to All IDEs"**.
-  2. Click **"🚀 Convert All HTTPS Repos to SSH"** to route remotes through git@github-<profile>:owner/repo.git.
-
-### Problem 2: Permission denied (publickey) on Git Push
-* **Cause**: Git on Windows doesn't know which SSH key to offer, or network firewalls block standard SSH port 22.
-* **Solution**:
-  * The app automatically configures ~/.ssh/config using **Port 443** (ssh.github.com) and IdentitiesOnly yes for each profile.
-
-### Problem 3: Personal Email Showing on Work Repositories (or vice versa)
-* **Cause**: Global user.email applies everywhere unless overridden per repository.
-* **Solution**:
-  * Map your D:/Personal folder to your Personal profile and D:/Professional to your Work profile. Git's native includeIf automatically switches the commit author based on folder path.
-
----
-
-## 🛡️ Security Architecture
-
-* **Zero Plaintext Tokens**: Personal Access Tokens (PATs) are encrypted and stored inside the **Windows Credential Manager** via the OS keyring service.
-* **Atomic File Writes**: All configuration files (~/.gitconfig, ~/.ssh/config, ~/.gitconfig-*) are written to temporary files and atomically replaced to prevent file corruption.
-* **Identities Only**: SSH host aliases strictly enforce IdentitiesOnly yes to prevent credential leakage across sessions.
 
 ---
 

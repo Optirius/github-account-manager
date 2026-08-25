@@ -243,22 +243,6 @@ class SSHView(ctk.CTkFrame):
         test_btn.configure(command=lambda p=key_info.private_key_path, n=key_info.name, b=test_btn: self._test_ssh_key(p, n, b))
         test_btn.pack(side="left", padx=(0, 8))
 
-        # Direct Upload to GitHub button
-        auth_accounts = [a for a in self.manager.settings.accounts if a.is_authenticated]
-        if auth_accounts and key_info.public_key_content:
-            upload_btn = ctk.CTkButton(
-                actions,
-                text="📤 Upload to GitHub Account...",
-                width=195,
-                height=32,
-                font=FONT_SMALL,
-                fg_color=ACCENT_BLUE,
-                hover_color=ACCENT_BLUE_HOVER,
-                text_color="#ffffff",
-                command=lambda k=key_info: self._open_upload_modal(k),
-            )
-            upload_btn.pack(side="left")
-
         # Delete SSH key button on far right
         del_btn = ctk.CTkButton(
             actions,
@@ -370,68 +354,3 @@ class SSHView(ctk.CTkFrame):
                 return False, err_msg
 
         NewSSHKeyDialog(self.winfo_toplevel(), on_generate=handle_gen)
-
-    def _open_upload_modal(self, key_info: SSHKeyInfo):
-        auth_accounts = [a for a in self.manager.settings.accounts if a.is_authenticated]
-        if not auth_accounts:
-            self.on_notify("No Token", "No accounts are currently logged in with a GitHub token.")
-            return
-
-        modal = BaseDialog(self.winfo_toplevel(), "Upload SSH Key to GitHub", 500, 340)
-        container = ctk.CTkFrame(modal, fg_color="transparent")
-        container.pack(fill="both", expand=True, padx=22, pady=22)
-
-        ctk.CTkLabel(container, text="Select GitHub Account to Upload Key To:", font=FONT_BODY_BOLD, text_color=TEXT_PRIMARY).pack(anchor="w", pady=(0, 6))
-
-        options = [f"{a.name} (@{a.username or a.email})" for a in auth_accounts]
-        combo = ctk.CTkComboBox(container, values=options, height=36, font=FONT_BODY)
-        combo.pack(fill="x", pady=(0, 15))
-
-        ctk.CTkLabel(container, text="Key Title on GitHub:", font=FONT_BODY_BOLD, text_color=TEXT_PRIMARY).pack(anchor="w", pady=(0, 4))
-        title_entry = ctk.CTkEntry(container, placeholder_text="My PC Key", height=36, font=FONT_BODY)
-        title_entry.insert(0, f"{key_info.name} ({key_info.key_type})")
-        title_entry.pack(fill="x", pady=(0, 20))
-
-        status_lbl = ctk.CTkLabel(container, text="", font=FONT_BODY)
-        status_lbl.pack(anchor="w", pady=(0, 10))
-
-        btn_row = ctk.CTkFrame(container, fg_color="transparent")
-        btn_row.pack(fill="x", side="bottom")
-
-        def submit():
-            sel_idx = options.index(combo.get()) if combo.get() in options else 0
-            acc = auth_accounts[sel_idx]
-            title = title_entry.get().strip()
-
-            def run():
-                res = self.manager.upload_ssh_key_to_github(acc.id, key_info.private_key_path, title)
-                if res.get("success"):
-                    self.after(0, lambda: [modal.destroy(), self.on_notify("Success", f"Key uploaded to GitHub for {acc.name}!")])
-                else:
-                    self.after(0, lambda: status_lbl.configure(text=f"Error: {res.get('error')}", text_color=ACCENT_RED))
-
-            threading.Thread(target=run, daemon=True).start()
-
-        ctk.CTkButton(
-            btn_row,
-            text="Cancel",
-            fg_color=BTN_SECONDARY_BG,
-            hover_color=BTN_SECONDARY_HOVER,
-            text_color=BTN_SECONDARY_TEXT,
-            border_width=1,
-            border_color=BORDER_COLOR,
-            command=modal.destroy,
-            width=90,
-            height=36,
-        ).pack(side="left")
-
-        ctk.CTkButton(
-            btn_row,
-            text="Upload Key",
-            fg_color=ACCENT_GREEN,
-            hover_color=ACCENT_GREEN_HOVER,
-            text_color="#ffffff",
-            command=submit,
-            width=130,
-            height=36,
-        ).pack(side="right")

@@ -1,4 +1,4 @@
-﻿from github_account_manager.models import Account, FolderMapping, SSHKeyInfo, AppSettings
+from github_account_manager.models import Account, FolderMapping, SSHKeyInfo, AppSettings
 
 
 def test_account_model():
@@ -11,7 +11,7 @@ def test_account_model():
     )
     assert acc.slug == "personal-account"
     assert acc.config_filename == ".gitconfig-personal-account"
-    assert acc.is_authenticated is False
+    assert acc.username == "tahmid95"
 
 
 def test_folder_mapping_normalization():
