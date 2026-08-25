@@ -12,8 +12,40 @@ permissions:
   contents: write
 
 jobs:
+  determine-version:
+    name: Determine Commit-Driven Version
+    runs-on: ubuntu-latest
+    outputs:
+      release_version: ${{ steps.version_step.outputs.release_version }}
+      release_tag: ${{ steps.version_step.outputs.release_tag }}
+      commit_log: ${{ steps.version_step.outputs.commit_log }}
+    steps:
+      - name: Checkout Full History
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute Dynamic Version from Commits
+        id: version_step
+        run: |
+          COMMIT_COUNT=$(git rev-list --count HEAD)
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            RELEASE_TAG="${{ github.ref_name }}"
+            RELEASE_VER="${RELEASE_TAG#v}"
+          else
+            RELEASE_VER="0.1.${COMMIT_COUNT}"
+            RELEASE_TAG="v${RELEASE_VER}"
+          fi
+          
+          echo "release_version=${RELEASE_VER}" >> "$GITHUB_OUTPUT"
+          echo "release_tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "Computed release version: ${RELEASE_VER} (${RELEASE_TAG})"
+
   test-and-build:
     name: Build (${{ matrix.os }})
+    needs: determine-version
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -32,9 +64,14 @@ jobs:
             artifact_name: github-account-manager-linux-x64.tar.gz
             artifact_path: dist/github-account-manager-linux-x64.tar.gz
 
+    env:
+      APP_VERSION_OVERRIDE: ${{ needs.determine-version.outputs.release_version }}
+
     steps:
-      - name: Checkout Code
+      - name: Checkout Full History
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install System Dependencies (Linux)
         if: runner.os == 'Linux'
@@ -62,7 +99,7 @@ jobs:
         if: runner.os == 'Linux'
         run: xvfb-run uv run pytest
 
-      - name: Build Application Package
+      - name: Build Application Package (with Injected Version)
         run: uv run python build.py
 
       - name: Upload Build Artifact
@@ -74,11 +111,13 @@ jobs:
 
   publish-release:
     name: Publish Release (Windows, macOS & Linux)
-    needs: test-and-build
+    needs: [determine-version, test-and-build]
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
+      - name: Checkout Full History
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Download All Platform Artifacts
         uses: actions/download-artifact@v4
@@ -86,43 +125,50 @@ jobs:
           path: release-assets
           merge-multiple: true
 
-      - name: Generate Release Tag & Body
-        id: release_info
+      - name: Prepare Release Notes & Changelog
         run: |
-          TAG_NAME="v$(date +'%Y.%m.%d-%H%M')"
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            TAG_NAME="${{ github.ref_name }}"
-          fi
-          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          RELEASE_TAG="${{ needs.determine-version.outputs.release_tag }}"
+          RELEASE_VER="${{ needs.determine-version.outputs.release_version }}"
+          
+          # Generate commit changelog for recent commits
+          COMMITS_MD=$(git log --pretty=format:"* %h - %s (%an)" -n 10)
 
-          cat << 'EOF' > release_notes.md
-          # 🐙 GitHub Multi-Account Manager Release
+          cat << EOF > release_notes.md
+          # 🐙 GitHub Multi-Account Manager ${RELEASE_TAG}
 
-          ### 📦 Direct Download Links by Operating System
+          Automated build for commit \`$(git rev-parse --short HEAD)\` (${RELEASE_TAG}).
 
-          | Operating System | Download File | Format |
+          ### 📦 Direct Download Links
+
+          | Operating System | Download File | Package Format |
           | :--- | :--- | :--- |
-          | **Windows (x64)** 🪟 | [**github-account-manager-windows-x64.zip**](https://github.com/${{ github.repository }}/releases/download/${{ steps.release_info.outputs.tag_name }}/github-account-manager-windows-x64.zip) | Portable `.zip` with `.exe` |
-          | **macOS (Universal)** 🍎 | [**github-account-manager-macos.zip**](https://github.com/${{ github.repository }}/releases/download/${{ steps.release_info.outputs.tag_name }}/github-account-manager-macos.zip) | macOS standalone bundle |
-          | **Linux (x64)** 🐧 | [**github-account-manager-linux-x64.tar.gz**](https://github.com/${{ github.repository }}/releases/download/${{ steps.release_info.outputs.tag_name }}/github-account-manager-linux-x64.tar.gz) | Linux standalone binary |
+          | **Windows (x64)** 🪟 | [**github-account-manager-windows-x64.zip**](https://github.com/${{ github.repository }}/releases/download/${RELEASE_TAG}/github-account-manager-windows-x64.zip) | Portable \`.zip\` with \`.exe\` |
+          | **macOS (Universal)** 🍎 | [**github-account-manager-macos.zip**](https://github.com/${{ github.repository }}/releases/download/${RELEASE_TAG}/github-account-manager-macos.zip) | macOS standalone bundle |
+          | **Linux (x64)** 🐧 | [**github-account-manager-linux-x64.tar.gz**](https://github.com/${{ github.repository }}/releases/download/${RELEASE_TAG}/github-account-manager-linux-x64.tar.gz) | Linux standalone binary |
 
           ---
 
-          ### 🌟 What's Inside:
+          ### 📝 Recent Commits in this Release:
+          ${COMMITS_MD}
+
+          ---
+
+          ### 🌟 Core Highlights:
           * **Zero-Switching Architecture**: Automated Git account routing by workspace root directory.
           * **1-Click IDE Isolation**: Stop VS Code, Cursor, and Windsurf from hijacking repository accounts.
           * **Tokenless SSH Keys**: 100% ED25519 key management with port 443 firewall bypass.
-          * **Cross-Platform**: Native adapters for Windows (`cmdkey`), macOS (Keychain), and Linux (Secret Service).
+          * **Cross-Platform Adapters**: Dedicated modules for Windows (\`cmdkey\`), macOS (Keychain), and Linux (Secret Service).
           EOF
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.release_info.outputs.tag_name }}
-          name: "Release ${{ steps.release_info.outputs.tag_name }}"
+          tag_name: ${{ needs.determine-version.outputs.release_tag }}
+          name: "GitHub Multi-Account Manager ${{ needs.determine-version.outputs.release_tag }}"
           body_path: release_notes.md
           files: release-assets/*
           draft: false
           prerelease: false
+          make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

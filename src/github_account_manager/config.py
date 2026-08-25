@@ -4,7 +4,30 @@ import os
 
 APP_NAME = "GitHub Multi-Account Manager"
 APP_ID = "com.optirius.github_account_manager"
-APP_VERSION = "0.1.0"
+
+
+def _resolve_app_version() -> str:
+    env_ver = os.getenv("APP_VERSION_OVERRIDE")
+    if env_ver:
+        return env_ver.strip().lstrip("v")
+
+    try:
+        import subprocess
+        res = subprocess.run(
+            ["git", "rev-list", "--count", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+        if res.returncode == 0 and res.stdout.strip().isdigit():
+            return f"0.1.{res.stdout.strip()}"
+    except Exception:
+        pass
+
+    return "0.1.0"
+
+
+APP_VERSION = _resolve_app_version()
 
 # Directories and paths
 DATA_DIR = Path.home() / ".github_account_manager"

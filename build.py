@@ -30,11 +30,28 @@ def clean_build_artifacts():
             shutil.rmtree(p, ignore_errors=True)
 
 
+def resolve_version() -> str:
+    env_ver = os.getenv("APP_VERSION_OVERRIDE")
+    if env_ver:
+        return env_ver.strip().lstrip("v")
+    try:
+        res = subprocess.run(["git", "rev-list", "--count", "HEAD"], capture_output=True, text=True, timeout=2)
+        if res.returncode == 0 and res.stdout.strip().isdigit():
+            return f"0.1.{res.stdout.strip()}"
+    except Exception:
+        pass
+    return "0.1.0"
+
+
 def run_pyinstaller(target_os: str):
-    print(f"📦 Packaging for {target_os.upper()}...")
+    version = resolve_version()
+    print(f"📦 Packaging for {target_os.upper()} (Version: v{version})...")
 
     ctk_path = Path(customtkinter.__file__).parent
     sep = ";" if target_os == "windows" else ":"
+
+    env = os.environ.copy()
+    env["APP_VERSION_OVERRIDE"] = version
 
     cmd = [
         sys.executable,
@@ -63,7 +80,7 @@ def run_pyinstaller(target_os: str):
     ]
 
     print("Running PyInstaller:", " ".join(cmd))
-    res = subprocess.run(cmd)
+    res = subprocess.run(cmd, env=env)
     if res.returncode != 0:
         print("❌ PyInstaller build failed!")
         sys.exit(res.returncode)
