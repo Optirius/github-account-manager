@@ -61,7 +61,7 @@ class InfoBanner(ctk.CTkFrame):
             height=24,
             fg_color="transparent",
             text_color=ACCENT_BLUE,
-            hover_color="transparent",
+            hover=False,
             command=self._toggle,
         )
         self.toggle_btn.pack(side="right")

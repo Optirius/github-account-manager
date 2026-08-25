@@ -49,7 +49,11 @@ def run_async(
                 if on_success:
                     on_success(result)
 
-            widget.after(0, success_cb)
+            try:
+                if hasattr(widget, "winfo_exists") and widget.winfo_exists():
+                    widget.after(0, success_cb)
+            except Exception:
+                pass
 
         except Exception as exc:
             err_details = traceback.format_exc()
@@ -60,15 +64,22 @@ def run_async(
                 if on_error:
                     on_error(exc)
                 if show_error_dialog:
-                    from github_account_manager.ui.components.dialogs import ErrorModalDialog
-                    ErrorModalDialog(
-                        widget.winfo_toplevel(),
-                        title=error_title,
-                        message=str(exc),
-                        details=err_details,
-                    )
+                    try:
+                        from github_account_manager.ui.components.dialogs import ErrorModalDialog
+                        ErrorModalDialog(
+                            widget.winfo_toplevel(),
+                            title=error_title,
+                            message=str(exc),
+                            details=err_details,
+                        )
+                    except Exception:
+                        pass
 
-            widget.after(0, error_cb)
+            try:
+                if hasattr(widget, "winfo_exists") and widget.winfo_exists():
+                    widget.after(0, error_cb)
+            except Exception:
+                pass
 
     def _restore_btn():
         if loading_btn and original_text:
