@@ -42,14 +42,18 @@ class BaseDialog(ctk.CTkToplevel):
         self.title(title)
         self.geometry(f"{width}x{height}")
         self.configure(fg_color=BG_APP)
-        self.resizable(False, False)
+        self.resizable(True, True)
+        self.minsize(min(width, 480), min(height, 320))
 
         self.transient(parent)
         self.grab_set()
         self.update_idletasks()
-        x = parent.winfo_x() + (parent.winfo_width() // 2) - (width // 2)
-        y = parent.winfo_y() + (parent.winfo_height() // 2) - (height // 2)
-        self.geometry(f"+{max(0, x)}+{max(0, y)}")
+        try:
+            x = parent.winfo_rootx() + (parent.winfo_width() // 2) - (width // 2)
+            y = parent.winfo_rooty() + (parent.winfo_height() // 2) - (height // 2)
+            self.geometry(f"+{max(20, x)}+{max(20, y)}")
+        except Exception:
+            pass
 
 
 class TokenLoginDialog(BaseDialog):
@@ -1050,52 +1054,62 @@ class ConfirmDeleteDialog(BaseDialog):
 class ErrorModalDialog(BaseDialog):
     """Rich error modal presenting clean error explanation with copyable traceback."""
     def __init__(self, parent, title: str, message: str, details: Optional[str] = None):
-        super().__init__(parent, title, 620, 480)
+        super().__init__(parent, title, 700, 560)
         self.details = details or message
 
         container = ctk.CTkFrame(self, fg_color="transparent")
-        container.pack(fill="both", expand=True, padx=25, pady=22)
+        container.pack(fill="both", expand=True, padx=26, pady=24)
 
-        # Header
+        # Header with Title
+        header = ctk.CTkFrame(container, fg_color="transparent")
+        header.pack(fill="x", pady=(0, 10))
+
         ctk.CTkLabel(
-            container,
+            header,
             text=f"❌  {title}",
             font=FONT_HEADING,
             text_color=ACCENT_RED,
-        ).pack(anchor="w", pady=(0, 6))
+            anchor="w",
+        ).pack(anchor="w")
 
-        # Main message
+        # Summary Message Card with comfortable padding
+        msg_card = ctk.CTkFrame(container, fg_color=BG_CARD, corner_radius=8, border_width=1, border_color=BORDER_COLOR)
+        msg_card.pack(fill="x", pady=(0, 14))
+
         ctk.CTkLabel(
-            container,
+            msg_card,
             text=message,
             font=FONT_BODY,
             text_color=TEXT_PRIMARY,
             justify="left",
-            wraplength=560,
-        ).pack(anchor="w", pady=(0, 12))
+            wraplength=620,
+            anchor="w",
+        ).pack(fill="x", padx=16, pady=12)
 
-        # Details box
+        # Technical Details / Traceback Box
         ctk.CTkLabel(
             container,
             text="Technical Details / Stack Trace:",
             font=FONT_BODY_BOLD,
             text_color=TEXT_SECONDARY,
-        ).pack(anchor="w", pady=(0, 4))
+            anchor="w",
+        ).pack(anchor="w", pady=(0, 6))
 
         text_box = ctk.CTkTextbox(
             container,
             font=FONT_MONO_SMALL,
-            fg_color=BG_CARD,
+            fg_color=BG_INSET,
             border_width=1,
             border_color=BORDER_COLOR,
             text_color=TEXT_PRIMARY,
             wrap="word",
+            height=200,
         )
-        text_box.pack(fill="both", expand=True, pady=(0, 14))
+        text_box.pack(fill="both", expand=True, pady=(0, 16))
         text_box.insert("1.0", self.details)
         text_box.configure(state="disabled")
 
-        # Bottom buttons
+        # Bottom buttons row
         btn_row = ctk.CTkFrame(container, fg_color="transparent")
         btn_row.pack(fill="x", side="bottom")
 

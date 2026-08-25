@@ -37,6 +37,7 @@ class InfoBanner(ctk.CTkFrame):
             **kwargs,
         )
         self.collapsed = collapsed
+        self._desc_labels: List[ctk.CTkLabel] = []
 
         # Header Frame (Clickable for toggle)
         self.header = ctk.CTkFrame(self, fg_color="transparent")
@@ -66,43 +67,55 @@ class InfoBanner(ctk.CTkFrame):
         )
         self.toggle_btn.pack(side="right")
 
-        # Body Frame containing structured explanation
+        # Body Frame containing structured grid explanation
         self.body = ctk.CTkFrame(self, fg_color="transparent")
+        self.body.grid_columnconfigure(0, weight=0, minsize=145)
+        self.body.grid_columnconfigure(1, weight=1)
+
+        items = [
+            ("🎯 What it does:", what_it_does),
+            ("💡 Why it's needed:", why_needed),
+        ]
+        if how_it_works:
+            items.append(("⚙️ How it works:", how_it_works))
+
+        for row_idx, (lbl_text, desc_text) in enumerate(items):
+            # Left title label (Top-Left aligned)
+            k_lbl = ctk.CTkLabel(
+                self.body,
+                text=lbl_text,
+                font=FONT_SMALL_BOLD,
+                text_color=TEXT_PRIMARY,
+                anchor="nw",
+                justify="left",
+            )
+            k_lbl.grid(row=row_idx, column=0, sticky="nw", padx=(0, 10), pady=3)
+
+            # Right description label (Top-Left aligned, responsive wrapping)
+            v_lbl = ctk.CTkLabel(
+                self.body,
+                text=desc_text,
+                font=FONT_SMALL,
+                text_color=TEXT_SECONDARY,
+                anchor="nw",
+                justify="left",
+                wraplength=580,
+            )
+            v_lbl.grid(row=row_idx, column=1, sticky="new", pady=3)
+            self._desc_labels.append(v_lbl)
+
+        self.body.bind("<Configure>", self._on_body_resize)
+
         if not collapsed:
             self.body.pack(fill="x", padx=14, pady=(0, 12))
 
-        # 1. What it does
-        self._add_item("🎯 What it does:", what_it_does)
-
-        # 2. Why it's needed
-        self._add_item("💡 Why it's needed:", why_needed)
-
-        # 3. How it works
-        if how_it_works:
-            self._add_item("⚙️ How it works:", how_it_works)
-
-    def _add_item(self, label: str, text: str):
-        row = ctk.CTkFrame(self.body, fg_color="transparent")
-        row.pack(fill="x", pady=2)
-
-        ctk.CTkLabel(
-            row,
-            text=label,
-            font=FONT_SMALL_BOLD,
-            text_color=TEXT_PRIMARY,
-            width=130,
-            anchor="nw",
-        ).pack(side="left", anchor="n")
-
-        ctk.CTkLabel(
-            row,
-            text=text,
-            font=FONT_SMALL,
-            text_color=TEXT_SECONDARY,
-            justify="left",
-            wraplength=700,
-            anchor="w",
-        ).pack(side="left", fill="x", expand=True)
+    def _on_body_resize(self, event):
+        wrap_w = max(200, event.width - 165)
+        for lbl in self._desc_labels:
+            try:
+                lbl.configure(wraplength=wrap_w)
+            except Exception:
+                pass
 
     def _toggle(self):
         self.collapsed = not self.collapsed
