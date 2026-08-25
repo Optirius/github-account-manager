@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 from github_account_manager.services.ssh_service import SSHService
 
 
@@ -33,3 +33,22 @@ def test_read_public_key(tmp_path):
     service = SSHService(ssh_dir=ssh_dir)
     content = service.read_public_key(ssh_dir / "mykey")
     assert content == "ssh-rsa AAAAB3NzaC1yc2E test@rsa.com"
+
+
+def test_delete_key(tmp_path):
+    ssh_dir = tmp_path / ".ssh"
+    ssh_dir.mkdir()
+    priv = ssh_dir / "id_del"
+    pub = ssh_dir / "id_del.pub"
+    priv.write_text("priv", encoding="utf-8")
+    pub.write_text("pub", encoding="utf-8")
+
+    service = SSHService(ssh_dir=ssh_dir)
+    assert priv.exists()
+    assert pub.exists()
+
+    res = service.delete_key(priv)
+    assert res is True
+    assert not priv.exists()
+    assert not pub.exists()
+

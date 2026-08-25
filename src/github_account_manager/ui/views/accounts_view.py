@@ -9,6 +9,7 @@ from github_account_manager.ui.components.account_card import AccountCard
 from github_account_manager.ui.components.dialogs import (
     AddEditAccountDialog,
     ResultModalDialog,
+    SSHTestGuideDialog,
     TokenLoginDialog,
 )
 from github_account_manager.ui.theme import (
@@ -200,17 +201,19 @@ class AccountsView(ctk.CTkFrame):
             )
             return
 
+        pub_content = self.manager.ssh_service.read_public_key(account.ssh_key_path) or ""
+
         def run():
             success, output, user = self.manager.test_ssh_for_account(account.id)
-            heading = f"Authenticated as @{user}" if user else ("Connected Successfully" if success else "SSH Auth Failed")
             self.after(
                 0,
-                lambda: ResultModalDialog(
+                lambda: SSHTestGuideDialog(
                     self.winfo_toplevel(),
-                    title=f"SSH Test - {account.name}",
-                    heading=heading,
-                    content=output,
-                    is_success=success,
+                    key_name=account.name,
+                    public_key_content=pub_content,
+                    is_connected=success,
+                    output=output,
+                    username=user,
                 ),
             )
 

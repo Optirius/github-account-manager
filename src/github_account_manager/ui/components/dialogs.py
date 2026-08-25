@@ -15,6 +15,7 @@ from github_account_manager.ui.theme import (
     ACCENT_GREEN_HOVER,
     ACCENT_ORANGE,
     ACCENT_RED,
+    ACCENT_RED_HOVER,
     BG_APP,
     BG_CARD,
     BG_INSET,

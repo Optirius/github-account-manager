@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 from github_account_manager.services.manager import AccountManager
 
 
@@ -40,3 +40,39 @@ def test_manager_account_lifecycle(tmp_path):
     # Delete mapping
     removed = manager.remove_folder_mapping(mapping.id)
     assert removed is True
+
+
+def test_manager_delete_ssh_key_unlinks_account(tmp_path):
+    config_file = tmp_path / "config.json"
+    gitconfig = tmp_path / ".gitconfig"
+    ssh_dir = tmp_path / ".ssh"
+    ssh_dir.mkdir()
+
+    priv = ssh_dir / "id_acc_key"
+    pub = ssh_dir / "id_acc_key.pub"
+    priv.write_text("priv", encoding="utf-8")
+    pub.write_text("pub", encoding="utf-8")
+
+    manager = AccountManager(
+        config_file=config_file,
+        gitconfig_path=gitconfig,
+        ssh_dir=ssh_dir,
+    )
+
+    acc = manager.add_account(
+        name="Personal",
+        email="personal@example.com",
+        git_name="Personal",
+        ssh_key_path=str(priv),
+    )
+    assert acc.ssh_key_path == str(priv)
+
+    deleted = manager.delete_ssh_key(str(priv))
+    assert deleted is True
+    assert not priv.exists()
+    assert not pub.exists()
+
+    # Verify unlinked from account
+    refreshed_acc = next(a for a in manager.settings.accounts if a.id == acc.id)
+    assert refreshed_acc.ssh_key_path is None
+

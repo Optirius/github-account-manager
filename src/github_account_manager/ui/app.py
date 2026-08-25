@@ -24,6 +24,7 @@ from github_account_manager.ui.theme import (
     TEXT_SECONDARY,
 )
 from github_account_manager.ui.views.accounts_view import AccountsView
+from github_account_manager.ui.views.apps_view import AppsView
 from github_account_manager.ui.views.folders_view import FoldersView
 from github_account_manager.ui.views.inspector_view import InspectorView
 from github_account_manager.ui.views.settings_view import SettingsView
@@ -96,6 +97,7 @@ class App(ctk.CTk):
             ("accounts", "👤  Accounts & Profiles"),
             ("folders", "📁  Directory Mappings"),
             ("ssh", "🔑  SSH Keys"),
+            ("apps", "🧩  Apps & Integrations"),
             ("inspector", "🔍  Git Inspector"),
             ("settings", "⚙️  Settings & Backups"),
         ]
@@ -167,6 +169,7 @@ class App(ctk.CTk):
                 on_notify=self.notify,
             ),
             "ssh": SSHView(self.view_host, self.manager, on_notify=self.notify),
+            "apps": AppsView(self.view_host, self.manager, on_notify=self.notify),
             "inspector": InspectorView(self.view_host, self.manager, on_notify=self.notify),
             "settings": SettingsView(
                 self.view_host,

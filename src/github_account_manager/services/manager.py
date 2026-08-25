@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from github_account_manager.config import CONFIG_FILE, DEFAULT_GITCONFIG, DEFAULT_SSH_DIR
 from github_account_manager.models import Account, AppSettings, FolderMapping, SSHKeyInfo
+from github_account_manager.services.app_integration_service import AppIntegrationService
 from github_account_manager.services.git_service import GitService
 from github_account_manager.services.github_service import GitHubService
 from github_account_manager.services.keyring_service import KeyringService
@@ -26,6 +27,7 @@ class AccountManager:
         self.ssh_service = SSHService(ssh_dir or DEFAULT_SSH_DIR)
         self.github_service = GitHubService()
         self.keyring_service = KeyringService()
+        self.app_service = AppIntegrationService()
         self.settings = self.load_settings()
 
         # If empty settings, try auto-discovering existing accounts from system
