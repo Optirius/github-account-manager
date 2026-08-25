@@ -389,8 +389,7 @@ class AppIntegrationService:
             return False, f"Could not parse GitHub repository owner and name from: {current_url}"
 
         if to_protocol.lower() == "ssh":
-            host_alias = f"github-{account_slug.lower()}" if account_slug else "github.com"
-            new_url = f"git@{host_alias}:{owner_repo}.git"
+            new_url = f"git@github.com:{owner_repo}.git"
         else:
             new_url = f"https://github.com/{owner_repo}.git"
 

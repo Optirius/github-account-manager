@@ -15,8 +15,9 @@ logger = logging.getLogger(__name__)
 
 
 class GitService:
-    def __init__(self, gitconfig_path: Optional[Path] = None):
+    def __init__(self, gitconfig_path: Optional[Path] = None, home_dir: Optional[Path] = None):
         self.gitconfig_path = gitconfig_path or DEFAULT_GITCONFIG
+        self.home_dir = home_dir or Path.home()
 
     def create_backup(self) -> Optional[Path]:
         """Create a timestamped backup of the current global .gitconfig and prune old backups."""
@@ -45,8 +46,7 @@ class GitService:
         """
         Generate and write ~/.gitconfig-<slug> for a specific account using atomic replacement.
         """
-        home = Path.home()
-        profile_path = home / account.config_filename
+        profile_path = self.home_dir / account.config_filename
 
         clean_name = sanitize_git_string(account.git_name)
         clean_email = sanitize_git_string(account.email)
@@ -72,7 +72,7 @@ class GitService:
 
     def remove_account_profile_config(self, account: Account) -> None:
         """Remove the ~/.gitconfig-<slug> file."""
-        profile_path = Path.home() / account.config_filename
+        profile_path = self.home_dir / account.config_filename
         if profile_path.exists():
             try:
                 profile_path.unlink()
@@ -158,7 +158,7 @@ class GitService:
         Generate ~/.ssh/config with per-account host aliases and port 443 fallback.
         This provides bulletproof identity isolation for external IDEs like VS Code and Cursor.
         """
-        ssh_dir = Path.home() / ".ssh"
+        ssh_dir = self.home_dir / ".ssh"
         ssh_dir.mkdir(parents=True, exist_ok=True)
         ssh_config_path = ssh_dir / "config"
 

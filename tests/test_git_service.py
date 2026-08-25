@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 from github_account_manager.models import Account, FolderMapping
 from github_account_manager.services.git_service import GitService
 
@@ -11,7 +11,7 @@ def test_git_service_sync_and_includeif(tmp_path):
         encoding="utf-8",
     )
 
-    git_service = GitService(gitconfig_path=gitconfig_path)
+    git_service = GitService(gitconfig_path=gitconfig_path, home_dir=tmp_path)
 
     acc1 = Account(
         id="acc-personal",

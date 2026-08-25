@@ -23,7 +23,8 @@ class AccountManager:
         ssh_dir: Optional[Path] = None,
     ):
         self.config_file = config_file or CONFIG_FILE
-        self.git_service = GitService(gitconfig_path or DEFAULT_GITCONFIG)
+        home_override = gitconfig_path.parent if gitconfig_path else None
+        self.git_service = GitService(gitconfig_path or DEFAULT_GITCONFIG, home_dir=home_override)
         self.ssh_service = SSHService(ssh_dir or DEFAULT_SSH_DIR)
         self.github_service = GitHubService()
         self.keyring_service = KeyringService()
