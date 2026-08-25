@@ -1,6 +1,7 @@
-"""UI Theme constants, color palettes (Light & Dark mode tuple support), and typography."""
+"""UI Theme constants, color palettes (Light & Dark mode tuple support), and typography across OSes."""
+import sys
 
-# CustomTkinter supports color tuples: (Light Mode Color, Dark Mode Color)
+# Color palettes (Light Mode Color, Dark Mode Color)
 
 # Backgrounds
 BG_APP = ("#f6f8fa", "#0d1117")
@@ -32,13 +33,24 @@ TEXT_PRIMARY = ("#1f2328", "#f0f6fc")
 TEXT_SECONDARY = ("#57606a", "#8b949e")
 TEXT_MUTED = ("#656d76", "#7d8590")
 
-# Typography - crisp, highly readable on modern displays
-FONT_TITLE = ("Segoe UI", 20, "bold")
-FONT_HEADING = ("Segoe UI", 16, "bold")
-FONT_SUBHEADING = ("Segoe UI", 14, "bold")
-FONT_BODY = ("Segoe UI", 12)
-FONT_BODY_BOLD = ("Segoe UI", 12, "bold")
-FONT_SMALL = ("Segoe UI", 11)
-FONT_SMALL_BOLD = ("Segoe UI", 11, "bold")
-FONT_MONO = ("Consolas", 12)
-FONT_MONO_SMALL = ("Consolas", 11)
+# Platform-aware Font Families
+if sys.platform == "darwin":
+    _SYS_FONT = "SF Pro Text"
+    _MONO_FONT = "Menlo"
+elif sys.platform.startswith("linux"):
+    _SYS_FONT = "Ubuntu"
+    _MONO_FONT = "Ubuntu Mono"
+else:
+    _SYS_FONT = "Segoe UI"
+    _MONO_FONT = "Consolas"
+
+# Typography
+FONT_TITLE = (_SYS_FONT, 20, "bold")
+FONT_HEADING = (_SYS_FONT, 16, "bold")
+FONT_SUBHEADING = (_SYS_FONT, 14, "bold")
+FONT_BODY = (_SYS_FONT, 12)
+FONT_BODY_BOLD = (_SYS_FONT, 12, "bold")
+FONT_SMALL = (_SYS_FONT, 11)
+FONT_SMALL_BOLD = (_SYS_FONT, 11, "bold")
+FONT_MONO = (_MONO_FONT, 12)
+FONT_MONO_SMALL = (_MONO_FONT, 11)

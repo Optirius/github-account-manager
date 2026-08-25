@@ -1,4 +1,4 @@
-"""Universal Service for automatically detecting and managing all Git & GitHub applications on Windows."""
+"""Universal Service for automatically detecting and managing Git & GitHub applications across Windows, macOS, and Linux."""
 import json
 import logging
 import os
@@ -9,36 +9,38 @@ import subprocess
 from typing import Any, Dict, List, Optional, Tuple
 
 from github_account_manager.models import FolderMapping
+from github_account_manager.platform import PlatformAdapter, get_platform_adapter
 
 logger = logging.getLogger(__name__)
 
 
 class AppIntegrationService:
-    def __init__(self):
-        self.appdata = Path(os.getenv("APPDATA", "")) if os.getenv("APPDATA") else None
-        self.localappdata = Path(os.getenv("LOCALAPPDATA", "")) if os.getenv("LOCALAPPDATA") else None
-        self.userprofile = Path(os.getenv("USERPROFILE", "")) if os.getenv("USERPROFILE") else None
+    def __init__(self, platform: Optional[PlatformAdapter] = None):
+        self.platform = platform or get_platform_adapter()
 
     # --- Universal App Detection ---
 
     def detect_all_installed_apps(self) -> List[Dict[str, Any]]:
         """
         Automatically scan and detect all installed IDEs, Git GUI clients,
-        CLI tools, and Credential Managers on the Windows device.
+        CLI tools, and Credential Managers on this operating system.
         """
         apps: List[Dict[str, Any]] = []
 
         # 1. VS Code Family (VS Code, Cursor, Windsurf, VS Code Insiders, VSCodium)
         vscode_variants = [
-            ("vscode", "Visual Studio Code", "💻", self.appdata / "Code" / "User" / "settings.json" if self.appdata else None),
-            ("cursor", "Cursor AI Editor", "✨", self.appdata / "Cursor" / "User" / "settings.json" if self.appdata else None),
-            ("windsurf", "Windsurf AI Editor", "🏄", self.appdata / "Windsurf" / "User" / "settings.json" if self.appdata else None),
-            ("vscode_insiders", "VS Code Insiders", "🔮", self.appdata / "Code - Insiders" / "User" / "settings.json" if self.appdata else None),
-            ("vscodium", "VSCodium", "🛡️", self.appdata / "VSCodium" / "User" / "settings.json" if self.appdata else None),
+            ("vscode", "Visual Studio Code", "💻"),
+            ("cursor", "Cursor AI Editor", "✨"),
+            ("windsurf", "Windsurf AI Editor", "🏄"),
+            ("vscode_insiders", "VS Code Insiders", "🔮"),
+            ("vscodium", "VSCodium", "🛡️"),
         ]
 
-        for app_id, name, icon, settings_p in vscode_variants:
-            if settings_p and settings_p.parent.exists():
+        for app_id, name, icon in vscode_variants:
+            cand_paths = self.platform.get_ide_settings_paths(app_id)
+            settings_p = next((p for p in cand_paths if p.parent.exists()), cand_paths[0] if cand_paths else None)
+
+            if settings_p and (settings_p.parent.exists() or shutil.which(app_id) or shutil.which(app_id.replace("_", "-"))):
                 is_isolated, git_auth, term_auth = self._check_vscode_family_settings(settings_p)
                 apps.append({
                     "id": app_id,
@@ -54,114 +56,55 @@ class AppIntegrationService:
                     "terminal_auth_disabled": term_auth is False,
                     "status_badge": "Folder-Aware (Isolated ✓)" if is_isolated else "Account Interception Active ⚠️",
                     "badge_variant": "active" if is_isolated else "warning",
-                    "description": f"Settings: {settings_p.name} in AppData. Disabling built-in GitHub auth forces {name} to use folder-specific accounts and SSH keys.",
+                    "description": f"Settings: {settings_p.name}. Disabling built-in GitHub auth forces {name} to use folder-specific accounts and SSH keys.",
                 })
 
-        # 2. GitHub Desktop
-        gh_desktop_path = self.localappdata / "GitHubDesktop" if self.localappdata else None
-        if gh_desktop_path and gh_desktop_path.exists():
-            apps.append({
-                "id": "github_desktop",
-                "name": "GitHub Desktop",
-                "icon": "🐙",
-                "category": "git_client",
-                "installed": True,
-                "path": str(gh_desktop_path),
-                "settings_path": str(self.appdata / "GitHub Desktop" if self.appdata else gh_desktop_path),
-                "supports_isolation": False,
-                "is_isolated": True,
-                "status_badge": "Folder & SSH Compatible",
-                "badge_variant": "active",
-                "description": "GitHub Desktop respects repository .gitconfig and SSH remotes (git@github.com). Converted SSH repositories will automatically use each folder's assigned SSH key.",
-            })
-
-        # 3. Visual Studio (2019/2022)
-        vs_ide_path = self.localappdata / "Microsoft" / "VisualStudio" if self.localappdata else None
-        if vs_ide_path and vs_ide_path.exists():
-            apps.append({
-                "id": "visual_studio",
-                "name": "Visual Studio (IDE)",
-                "icon": "🖥️",
-                "category": "ide",
-                "installed": True,
-                "path": str(vs_ide_path),
-                "settings_path": None,
-                "supports_isolation": False,
-                "is_isolated": False,
-                "status_badge": "Uses Windows Credential Vault",
-                "badge_variant": "info",
-                "description": "Visual Studio authenticates HTTPS remotes through Windows Credential Manager. Use SSH remotes to ensure strict folder isolation.",
-            })
-
-        # 4. JetBrains IDEs (IntelliJ, PyCharm, WebStorm, CLion, Rider, etc.)
-        jetbrains_path = self.appdata / "JetBrains" if self.appdata else None
-        if jetbrains_path and jetbrains_path.exists():
-            jb_dirs = [d.name for d in jetbrains_path.iterdir() if d.is_dir()]
-            apps.append({
-                "id": "jetbrains",
-                "name": f"JetBrains IDEs ({', '.join(jb_dirs[:3])})",
-                "icon": "🧠",
-                "category": "ide",
-                "installed": True,
-                "path": str(jetbrains_path),
-                "settings_path": None,
-                "supports_isolation": False,
-                "is_isolated": True,
-                "status_badge": "Folder & Native Git Compatible",
-                "badge_variant": "active",
-                "description": "JetBrains IDEs use Native Git executable and strictly follow ~/.gitconfig includeIf folder rules and SSH commands.",
-            })
-
-        # 5. Git CLI & Git Credential Manager (GCM)
-        gcm_installed = shutil.which("git-credential-manager") is not None or shutil.which("git") is not None
-        creds = self.list_windows_git_credentials()
-        apps.append({
-            "id": "gcm",
-            "name": "Git Credential Manager & Windows Vault",
-            "icon": "🔐",
-            "category": "credential_helper",
-            "installed": gcm_installed,
-            "path": "Windows Credential Manager",
-            "settings_path": "~/.gitconfig (credential.helper = manager)",
-            "supports_isolation": False,
-            "is_isolated": len(creds) == 0,
-            "status_badge": f"{len(creds)} Cached GitHub Credentials" if creds else "Vault Clean (No Overrides ✓)",
-            "badge_variant": "warning" if creds else "active",
-            "description": "Manages HTTPS authentication tokens for all Windows command-line Git tools, Visual Studio, and terminal shells.",
-            "cached_credentials": creds,
-        })
+        # 2. Add other detected platform apps (GitHub Desktop, Git CLI, etc.)
+        for extra_app in self.platform.detect_installed_apps():
+            if not any(a["id"] == extra_app["id"] for a in apps):
+                apps.append({
+                    "id": extra_app["id"],
+                    "name": extra_app["name"],
+                    "icon": extra_app["icon"],
+                    "category": extra_app["category"],
+                    "installed": True,
+                    "path": extra_app.get("exe_path") or "System Path",
+                    "settings_path": None,
+                    "supports_isolation": extra_app.get("supports_isolation", False),
+                    "is_isolated": True,
+                    "status_badge": "Folder & SSH Compatible",
+                    "badge_variant": "active",
+                    "description": f"{extra_app['name']} respects repository .gitconfig and SSH remotes (git@github.com).",
+                })
 
         return apps
 
-    def _check_vscode_family_settings(self, settings_path: Path) -> Tuple[bool, Any, Any]:
-        """Check if a VS Code derivative has GitHub auth disabled."""
-        if not settings_path.exists():
+    def _check_vscode_family_settings(self, settings_file: Path) -> Tuple[bool, Optional[bool], Optional[bool]]:
+        """Check if an editor's settings.json has github.gitAuthentication disabled."""
+        if not settings_file.exists():
             return False, None, None
+
         try:
-            content = settings_path.read_text(encoding="utf-8")
+            content = settings_file.read_text(encoding="utf-8")
             data = json.loads(content)
-            git_auth = data.get("github.gitAuthentication", True)
-            term_auth = data.get("git.terminalAuthentication", True)
-            is_isolated = (git_auth is False) and (term_auth is False)
+            git_auth = data.get("github.gitAuthentication")
+            term_auth = data.get("git.terminalAuthentication")
+
+            is_isolated = (git_auth is False)
             return is_isolated, git_auth, term_auth
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Could not parse {settings_file}: {e}")
             return False, None, None
 
     # --- IDE Isolation Handlers (VS Code, Cursor, Windsurf, etc.) ---
 
     def apply_isolation_to_app(self, app_id: str) -> Tuple[bool, str]:
         """Apply folder isolation settings to a specific IDE (VS Code, Cursor, etc.)."""
-        settings_map = {
-            "vscode": self.appdata / "Code" / "User" / "settings.json" if self.appdata else None,
-            "cursor": self.appdata / "Cursor" / "User" / "settings.json" if self.appdata else None,
-            "windsurf": self.appdata / "Windsurf" / "User" / "settings.json" if self.appdata else None,
-            "vscode_insiders": self.appdata / "Code - Insiders" / "User" / "settings.json" if self.appdata else None,
-            "vscodium": self.appdata / "VSCodium" / "User" / "settings.json" if self.appdata else None,
-        }
+        cand_paths = self.platform.get_ide_settings_paths(app_id)
+        if not cand_paths:
+            return False, f"Configuration path for '{app_id}' not found on {self.platform.os_name}."
 
-        settings_path = settings_map.get(app_id)
-        if not settings_path:
-            return False, f"Configuration path for '{app_id}' not found."
+        settings_path = next((p for p in cand_paths if p.parent.exists()), cand_paths[0])
 
         try:
             settings_path.parent.mkdir(parents=True, exist_ok=True)
@@ -201,16 +144,9 @@ class AppIntegrationService:
 
     def restore_defaults_for_app(self, app_id: str) -> Tuple[bool, str]:
         """Restore default Git authentication behavior for a specific IDE."""
-        settings_map = {
-            "vscode": self.appdata / "Code" / "User" / "settings.json" if self.appdata else None,
-            "cursor": self.appdata / "Cursor" / "User" / "settings.json" if self.appdata else None,
-            "windsurf": self.appdata / "Windsurf" / "User" / "settings.json" if self.appdata else None,
-            "vscode_insiders": self.appdata / "Code - Insiders" / "User" / "settings.json" if self.appdata else None,
-            "vscodium": self.appdata / "VSCodium" / "User" / "settings.json" if self.appdata else None,
-        }
-
-        settings_path = settings_map.get(app_id)
-        if not settings_path or not settings_path.exists():
+        cand_paths = self.platform.get_ide_settings_paths(app_id)
+        settings_path = next((p for p in cand_paths if p.exists()), None)
+        if not settings_path:
             return False, "Settings file not found."
 
         try:
@@ -224,158 +160,155 @@ class AppIntegrationService:
         except Exception as e:
             return False, f"Failed to restore {app_id}: {e}"
 
-    # --- Windows Credential Manager (GCM) ---
+    # --- OS Credential Store (Windows Vault / macOS Keychain / Linux Secret Service) ---
 
     def list_windows_git_credentials(self) -> List[Dict[str, str]]:
-        """List cached GitHub/Git credentials stored in Windows Credential Manager."""
-        try:
-            res = subprocess.run(["cmdkey", "/list"], capture_output=True, text=True, timeout=8)
-            output = res.stdout
+        """List cached GitHub/Git credentials stored in the OS credential store."""
+        raw_creds = self.platform.list_git_credentials()
+        creds = []
+        for c in raw_creds:
+            creds.append({
+                "Target": c.get("target", "Unknown"),
+                "Type": c.get("type", "Generic"),
+                "User": c.get("user", "None"),
+                "IsConflicting": str(c.get("is_conflicting", False)),
+            })
+        return creds
 
-            creds = []
-            current: Dict[str, str] = {}
-            for line in output.splitlines():
-                line = line.strip()
-                if line.startswith("Target:"):
-                    if current and "Target" in current:
-                        creds.append(current)
-                    raw_target = line.split("Target:", 1)[1].strip()
-                    current = {"Target": raw_target}
-                elif line.startswith("Type:"):
-                    current["Type"] = line.split("Type:", 1)[1].strip()
-                elif line.startswith("User:"):
-                    current["User"] = line.split("User:", 1)[1].strip()
+    def delete_windows_git_credential(self, target: str) -> Tuple[bool, str]:
+        """Delete a conflicting Git credential entry from the OS credential store."""
+        success = self.platform.delete_git_credential(target)
+        if success:
+            return True, f"Successfully deleted credential: {target}"
+        return False, f"Failed to delete credential: {target}"
 
-            if current and "Target" in current:
-                creds.append(current)
+    def delete_all_conflicting_credentials(self) -> Tuple[int, List[str]]:
+        """Delete all cached github.com credentials."""
+        creds = self.list_windows_git_credentials()
+        deleted_count = 0
+        messages = []
 
-            github_creds = [
-                c for c in creds
-                if "github" in c.get("Target", "").lower() or "git:" in c.get("Target", "").lower()
-            ]
-            return github_creds
-        except Exception as e:
-            logger.error(f"Failed to query cmdkey: {e}")
-            return []
+        for cred in creds:
+            target = cred.get("Target", "")
+            if "github" in target.lower():
+                success, msg = self.delete_windows_git_credential(target)
+                if success:
+                    deleted_count += 1
+                    messages.append(f"✓ Removed: {target}")
+                else:
+                    messages.append(f"✗ Failed: {target} ({msg})")
 
-    def delete_windows_credential(self, target: str) -> Tuple[bool, str]:
-        """Delete a cached credential from Windows Credential Manager."""
-        clean_target = target.strip()
-        if clean_target.startswith("LegacyGeneric:target="):
-            clean_target = clean_target[len("LegacyGeneric:target="):]
+        return deleted_count, messages
 
-        try:
-            res = subprocess.run(["cmdkey", f"/delete:{clean_target}"], capture_output=True, text=True, timeout=8)
-            if res.returncode != 0 and target != clean_target:
-                res = subprocess.run(["cmdkey", f"/delete:{target}"], capture_output=True, text=True, timeout=8)
-
-            if res.returncode == 0:
-                return True, f"Deleted credential '{clean_target}' from Windows Credential Manager."
-            return False, res.stderr or res.stdout or "Failed to delete credential."
-        except Exception as e:
-            return False, str(e)
-
-    def enable_git_credential_use_http_path(self) -> Tuple[bool, str]:
-        """Configure Git to differentiate HTTPS credentials per repository path."""
-        try:
-            res = subprocess.run(
-                ["git", "config", "--global", "credential.useHttpPath", "true"],
-                capture_output=True,
-                text=True,
-                timeout=8,
-            )
-            if res.returncode == 0:
-                return True, "Configured 'credential.useHttpPath = true' globally."
-            return False, res.stderr or "Failed to set git config."
-        except Exception as e:
-            return False, str(e)
-
-    # --- Repository Remote Scanner & Converter ---
+    # --- Repository Remote Scanner & HTTPS -> SSH Protocol Converter ---
 
     def scan_repositories(self, folder_mappings: List[FolderMapping]) -> List[Dict[str, Any]]:
         """
-        Scan all git repositories inside user-configured folder mappings.
-        Returns detailed list with remote URL, protocol, and target owner/repo.
+        Scan all mapped workspace directories for git repositories,
+        checking their remote protocol (HTTPS vs SSH) and account alignment.
         """
-        found_repos: List[Dict[str, Any]] = []
-        visited_paths = set()
+        repos: List[Dict[str, Any]] = []
 
         for mapping in folder_mappings:
-            base_dir = Path(mapping.folder_path)
-            if not base_dir.exists() or not base_dir.is_dir():
+            root = Path(mapping.folder_path)
+            if not root.exists():
                 continue
 
-            candidates: List[Path] = []
-            if (base_dir / ".git").exists():
-                candidates.append(base_dir)
+            # Check if root itself is a repo
+            if (root / ".git").exists():
+                self._inspect_and_add_repo(root, mapping, repos)
 
+            # Scan child directories (up to depth 2)
             try:
-                for item in base_dir.iterdir():
-                    if item.is_dir() and not item.name.startswith("."):
-                        if (item / ".git").exists():
-                            candidates.append(item)
-                        else:
-                            try:
-                                for sub in item.iterdir():
-                                    if sub.is_dir() and (sub / ".git").exists():
-                                        candidates.append(sub)
-                            except Exception:
-                                pass
-            except Exception as e:
-                logger.error(f"Error scanning {base_dir}: {e}")
+                for child in root.iterdir():
+                    if child.is_dir() and (child / ".git").exists():
+                        self._inspect_and_add_repo(child, mapping, repos)
+                    elif child.is_dir() and not child.name.startswith("."):
+                        try:
+                            for grandchild in child.iterdir():
+                                if grandchild.is_dir() and (grandchild / ".git").exists():
+                                    self._inspect_and_add_repo(grandchild, mapping, repos)
+                        except (PermissionError, OSError):
+                            pass
+            except (PermissionError, OSError) as e:
+                logger.debug(f"Permission error scanning {root}: {e}")
 
-            for repo_dir in candidates:
-                norm_str = repo_dir.as_posix().lower()
-                if norm_str in visited_paths:
-                    continue
-                visited_paths.add(norm_str)
+        return repos
 
-                remote_url = self._get_repo_remote_url(repo_dir)
-                protocol = "SSH" if remote_url.startswith("git@") or "ssh://" in remote_url else ("HTTPS" if remote_url.startswith("http") else "Local/None")
-                owner_repo = self._parse_owner_repo(remote_url)
+    def _inspect_and_add_repo(self, repo_path: Path, mapping: FolderMapping, repos: List[Dict[str, Any]]) -> None:
+        """Inspect a single git repository and append its info to repos list."""
+        if any(r["path"] == str(repo_path) for r in repos):
+            return
 
-                found_repos.append({
-                    "name": repo_dir.name,
-                    "path": str(repo_dir),
-                    "folder_mapping": mapping.folder_path,
-                    "account_id": mapping.account_id,
-                    "remote_url": remote_url,
-                    "protocol": protocol,
-                    "owner_repo": owner_repo,
-                })
+        remote_url = self._get_repo_remote_url(repo_path)
+        if not remote_url:
+            return
 
-        return found_repos
+        is_ssh = remote_url.startswith("git@") or "ssh://" in remote_url
+        is_https = remote_url.startswith("https://") or remote_url.startswith("http://")
 
-    def _get_repo_remote_url(self, repo_path: Path) -> str:
+        owner_repo = self._parse_owner_repo(remote_url)
+
+        repos.append({
+            "name": repo_path.name,
+            "path": str(repo_path),
+            "folder_mapping": mapping.folder_path,
+            "account_id": mapping.account_id,
+            "remote_url": remote_url,
+            "owner_repo": owner_repo,
+            "is_ssh": is_ssh,
+            "is_https": is_https,
+            "protocol": "SSH" if is_ssh else ("HTTPS" if is_https else "Other"),
+            "status_badge": "SSH (Isolated ✓)" if is_ssh else "HTTPS (May Conflict ⚠️)",
+            "badge_variant": "active" if is_ssh else "warning",
+            "needs_conversion": is_https,
+        })
+
+    def _get_repo_remote_url(self, repo_path: Path) -> Optional[str]:
+        """Query git remote get-url origin for a repository."""
         try:
             res = subprocess.run(
                 ["git", "-C", str(repo_path), "remote", "get-url", "origin"],
                 capture_output=True,
                 text=True,
-                timeout=6,
+                timeout=4,
             )
-            return res.stdout.strip()
+            if res.returncode == 0 and res.stdout.strip():
+                return res.stdout.strip()
         except Exception:
-            return ""
+            pass
 
-    def _parse_owner_repo(self, remote_url: str) -> str:
-        if not remote_url:
+        # Fallback: parse .git/config directly
+        git_config = repo_path / ".git" / "config"
+        if git_config.exists():
+            try:
+                content = git_config.read_text(encoding="utf-8", errors="ignore")
+                m = re.search(r'\[remote\s+"origin"\][^\[]*url\s*=\s*(.+)', content, re.MULTILINE)
+                if m:
+                    return m.group(1).strip()
+            except Exception:
+                pass
+        return None
+
+    def _parse_owner_repo(self, url: str) -> Optional[str]:
+        """Extract 'owner/repo' from GitHub HTTPS or SSH URL."""
+        if not url:
             return ""
-        m = re.search(r"github(?:-[a-zA-Z0-9_\-]+)?\.com?[:/]([a-zA-Z0-9_\-]+/[a-zA-Z0-9_\.\-]+)", remote_url)
+        m = re.search(r"github(?:\-[a-zA-Z0-9_\-]+)?\.com?[:/]([a-zA-Z0-9_\-]+/[a-zA-Z0-9_\.\-]+)", url)
         if m:
             clean = m.group(1)
             if clean.endswith(".git"):
                 clean = clean[:-4]
             return clean
-        return ""
+        return None
 
     def convert_repo_remote(
         self,
-        repo_path: str | Path,
+        repo_path: str,
         to_protocol: str = "ssh",
         account_slug: Optional[str] = None,
     ) -> Tuple[bool, str]:
-        """Convert a repository remote URL between HTTPS and SSH with dedicated Host Aliases."""
+        """Convert a repository remote URL between HTTPS and SSH."""
         p = Path(repo_path)
         if not p.exists() or not (p / ".git").exists():
             return False, f"Directory is not a valid git repository: {repo_path}"
@@ -404,7 +337,24 @@ class AppIntegrationService:
                 timeout=6,
             )
             if res.returncode == 0:
-                return True, f"Converted remote to {to_protocol.upper()}: {new_url}"
-            return False, res.stderr or "Failed to set remote URL."
+                return True, f"Converted remote to {new_url}"
+            return False, f"Git error: {res.stderr.strip()}"
         except Exception as e:
-            return False, str(e)
+            return False, f"Failed to set remote URL: {e}"
+
+    def convert_all_repos_to_ssh(self, folder_mappings: List[FolderMapping]) -> Tuple[int, List[str]]:
+        """Scan and convert all HTTPS repositories in mapped folders to clean SSH."""
+        repos = self.scan_repositories(folder_mappings)
+        converted = 0
+        messages = []
+
+        for repo in repos:
+            if repo["is_https"]:
+                success, msg = self.convert_repo_remote(repo["path"], to_protocol="ssh")
+                if success:
+                    converted += 1
+                    messages.append(f"✓ {repo['name']}: {msg}")
+                else:
+                    messages.append(f"✗ {repo['name']}: {msg}")
+
+        return converted, messages

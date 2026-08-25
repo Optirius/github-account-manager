@@ -1,0 +1,128 @@
+name: Cross-Platform Build & Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test-and-build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform_name: windows
+            artifact_name: github-account-manager-windows-x64.zip
+            artifact_path: dist/github-account-manager-windows-x64.zip
+          - os: macos-latest
+            platform_name: macos
+            artifact_name: github-account-manager-macos.zip
+            artifact_path: dist/github-account-manager-macos.zip
+          - os: ubuntu-latest
+            platform_name: linux
+            artifact_name: github-account-manager-linux-x64.tar.gz
+            artifact_path: dist/github-account-manager-linux-x64.tar.gz
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install System Dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk libtk8.6 libtcl8.6 xvfb
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          version: "latest"
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install Project & Dev Dependencies
+        run: uv sync --all-groups
+
+      - name: Run Test Suite
+        if: runner.os != 'Linux'
+        run: uv run pytest
+
+      - name: Run Test Suite with Virtual Display (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run uv run pytest
+
+      - name: Build Application Package
+        run: uv run python build.py
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform_name }}-build
+          path: ${{ matrix.artifact_path }}
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish Release (Windows, macOS & Linux)
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download All Platform Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Generate Release Tag & Body
+        id: release_info
+        run: |
+          TAG_NAME="v$(date +'%Y.%m.%d-%H%M')"
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            TAG_NAME="${{ github.ref_name }}"
+          fi
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+
+          cat << 'EOF' > release_notes.md
+          # 🐙 GitHub Multi-Account Manager Release
+
+          ### 📦 Direct Download Links by Operating System
+
+          | Operating System | Download File | Format |
+          | :--- | :--- | :--- |
+          | **Windows (x64)** 🪟 | [**github-account-manager-windows-x64.zip**](https://github.com/${{ github.repository }}/releases/download/${{ steps.release_info.outputs.tag_name }}/github-account-manager-windows-x64.zip) | Portable `.zip` with `.exe` |
+          | **macOS (Universal)** 🍎 | [**github-account-manager-macos.zip**](https://github.com/${{ github.repository }}/releases/download/${{ steps.release_info.outputs.tag_name }}/github-account-manager-macos.zip) | macOS standalone bundle |
+          | **Linux (x64)** 🐧 | [**github-account-manager-linux-x64.tar.gz**](https://github.com/${{ github.repository }}/releases/download/${{ steps.release_info.outputs.tag_name }}/github-account-manager-linux-x64.tar.gz) | Linux standalone binary |
+
+          ---
+
+          ### 🌟 What's Inside:
+          * **Zero-Switching Architecture**: Automated Git account routing by workspace root directory.
+          * **1-Click IDE Isolation**: Stop VS Code, Cursor, and Windsurf from hijacking repository accounts.
+          * **Tokenless SSH Keys**: 100% ED25519 key management with port 443 firewall bypass.
+          * **Cross-Platform**: Native adapters for Windows (`cmdkey`), macOS (Keychain), and Linux (Secret Service).
+          EOF
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_info.outputs.tag_name }}
+          name: "Release ${{ steps.release_info.outputs.tag_name }}"
+          body_path: release_notes.md
+          files: release-assets/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

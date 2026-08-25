@@ -19,8 +19,15 @@ def test_vscode_isolation_workflow(tmp_path):
     settings_file.parent.mkdir(parents=True)
     settings_file.write_text(json.dumps({"editor.fontSize": 14}), encoding="utf-8")
 
-    service = AppIntegrationService()
-    service.appdata = tmp_path
+    from github_account_manager.platform.windows import WindowsPlatformAdapter
+
+    class MockPlatform(WindowsPlatformAdapter):
+        def get_ide_settings_paths(self, ide_id: str):
+            if ide_id == "vscode":
+                return [settings_file]
+            return []
+
+    service = AppIntegrationService(platform=MockPlatform())
 
     apps = service.detect_all_installed_apps()
     vscode_app = next((a for a in apps if a["id"] == "vscode"), None)
