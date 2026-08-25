@@ -26,6 +26,7 @@ from github_account_manager.ui.theme import (
 from github_account_manager.ui.views.accounts_view import AccountsView
 from github_account_manager.ui.views.apps_view import AppsView
 from github_account_manager.ui.views.folders_view import FoldersView
+from github_account_manager.ui.views.guide_view import GuideView
 from github_account_manager.ui.views.inspector_view import InspectorView
 from github_account_manager.ui.views.settings_view import SettingsView
 from github_account_manager.ui.views.ssh_view import SSHView
@@ -94,6 +95,7 @@ class App(ctk.CTk):
         self.nav_buttons = {}
 
         nav_items = [
+            ("guide", "📖  Guide & Quickstart"),
             ("accounts", "👤  Accounts & Profiles"),
             ("folders", "📁  Directory Mappings"),
             ("ssh", "🔑  SSH Keys"),
@@ -161,6 +163,7 @@ class App(ctk.CTk):
 
         # Instantiate Views inside view_host
         self.views = {
+            "guide": GuideView(self.view_host, on_navigate=self.show_view),
             "accounts": AccountsView(self.view_host, self.manager, on_notify=self.notify),
             "folders": FoldersView(
                 self.view_host,
