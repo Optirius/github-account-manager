@@ -1,23 +1,17 @@
-"""Main Application Window for GitHub Multi-Account Manager with robust crash-free toast notifications."""
-import tkinter as tk
-from typing import Optional
+"""Main Application window with modular view switching, lazy view loading, and custom notifications."""
+from typing import Dict, Optional
 import customtkinter as ctk
 
 from github_account_manager.config import APP_NAME, APP_VERSION
 from github_account_manager.services.manager import AccountManager
 from github_account_manager.ui.theme import (
-    ACCENT_BLUE,
-    ACCENT_GREEN,
     BG_APP,
     BG_CARD,
     BG_CARD_HOVER,
     BG_SIDEBAR,
     BORDER_COLOR,
-    FONT_BODY,
     FONT_BODY_BOLD,
-    FONT_HEADING,
     FONT_SMALL,
-    FONT_SUBHEADING,
     FONT_TITLE,
     TEXT_MUTED,
     TEXT_PRIMARY,
@@ -37,19 +31,27 @@ class App(ctk.CTk):
         super().__init__()
         self.manager = manager or AccountManager()
 
+        # Set appearance mode before widget creation
+        ctk.set_appearance_mode(self.manager.settings.theme)
+        ctk.set_default_color_theme("blue")
+
         # Window Configuration
         self.title(f"{APP_NAME} v{APP_VERSION}")
         self.geometry("1100x720")
         self.minsize(960, 620)
         self.configure(fg_color=BG_APP)
 
-        # Set appearance mode
-        ctk.set_appearance_mode(self.manager.settings.theme)
-        ctk.set_default_color_theme("blue")
-
         self._toast_timer_id = None
+        self._view_cache: Dict[str, ctk.CTkFrame] = {}
+
         self._build_layout()
         self.show_view("accounts")
+
+        # Force window to foreground
+        self.lift()
+        self.attributes("-topmost", True)
+        self.after_idle(lambda: self.attributes("-topmost", False))
+        self.focus_force()
 
     def _build_layout(self):
         # Master grid layout
@@ -161,26 +163,40 @@ class App(ctk.CTk):
         self.view_host = ctk.CTkFrame(self.content_area, fg_color="transparent", corner_radius=0)
         self.view_host.pack(fill="both", expand=True)
 
-        # Instantiate Views inside view_host
-        self.views = {
-            "guide": GuideView(self.view_host, on_navigate=self.show_view),
-            "accounts": AccountsView(self.view_host, self.manager, on_notify=self.notify),
-            "folders": FoldersView(
+    def _get_or_create_view(self, view_name: str) -> Optional[ctk.CTkFrame]:
+        """Lazy load views on demand to speed up initial app launch."""
+        if view_name in self._view_cache:
+            return self._view_cache[view_name]
+
+        view = None
+        if view_name == "guide":
+            view = GuideView(self.view_host, on_navigate=self.show_view)
+        elif view_name == "accounts":
+            view = AccountsView(self.view_host, self.manager, on_notify=self.notify)
+        elif view_name == "folders":
+            view = FoldersView(
                 self.view_host,
                 self.manager,
                 on_inspect=self.switch_to_inspect,
                 on_notify=self.notify,
-            ),
-            "ssh": SSHView(self.view_host, self.manager, on_notify=self.notify),
-            "apps": AppsView(self.view_host, self.manager, on_notify=self.notify),
-            "inspector": InspectorView(self.view_host, self.manager, on_notify=self.notify),
-            "settings": SettingsView(
+            )
+        elif view_name == "ssh":
+            view = SSHView(self.view_host, self.manager, on_notify=self.notify)
+        elif view_name == "apps":
+            view = AppsView(self.view_host, self.manager, on_notify=self.notify)
+        elif view_name == "inspector":
+            view = InspectorView(self.view_host, self.manager, on_notify=self.notify)
+        elif view_name == "settings":
+            view = SettingsView(
                 self.view_host,
                 self.manager,
                 on_theme_change=self._handle_theme_change,
                 on_notify=self.notify,
-            ),
-        }
+            )
+
+        if view is not None:
+            self._view_cache[view_name] = view
+        return view
 
     def show_view(self, view_name: str):
         # Update Nav button styles
@@ -190,21 +206,22 @@ class App(ctk.CTk):
             else:
                 btn.configure(fg_color="transparent", text_color=TEXT_SECONDARY)
 
-        # Hide all views and show selected inside view_host
-        for key, view in self.views.items():
-            if key == view_name:
-                view.pack(fill="both", expand=True)
-                if hasattr(view, "refresh"):
-                    view.refresh()
-            else:
-                view.pack_forget()
+        # Hide all currently instantiated views
+        for v in self._view_cache.values():
+            v.pack_forget()
+
+        # Get or create selected view and display
+        view = self._get_or_create_view(view_name)
+        if view is not None:
+            view.pack(fill="both", expand=True)
 
         self._update_footer()
 
     def switch_to_inspect(self, path: str):
         self.show_view("inspector")
-        inspector: InspectorView = self.views["inspector"]  # type: ignore
-        inspector.inspect_path(path)
+        inspector = self._get_or_create_view("inspector")
+        if isinstance(inspector, InspectorView):
+            inspector.inspect_path(path)
 
     def _handle_theme_change(self, theme: str):
         ctk.set_appearance_mode(theme)
@@ -217,7 +234,6 @@ class App(ctk.CTk):
     def notify(self, title: str, message: str, is_error: bool = False):
         """Display a safe, crash-proof toast notification."""
         try:
-            # Color based on severity
             if is_error:
                 self.toast_bar.configure(
                     fg_color=("#ffebe9", "#da3633"),
@@ -237,7 +253,6 @@ class App(ctk.CTk):
                     text_color=("#0969da", "#ffffff"),
                 )
 
-            # Pack toast safely inside dedicated toast_container
             self.toast_bar.pack(fill="both", expand=True)
 
             if self._toast_timer_id is not None:
@@ -251,5 +266,16 @@ class App(ctk.CTk):
 
             self._toast_timer_id = self.after(3500, hide)
             self._update_footer()
+        except Exception:
+            pass
+
+    def report_callback_exception(self, exc, val, tb):
+        """Catch all Tkinter callback exceptions to log them and prevent silent window closure."""
+        import logging
+        import traceback
+        err = "".join(traceback.format_exception(exc, val, tb))
+        logging.getLogger("ui").error(f"Tkinter callback exception:\n{err}")
+        try:
+            self.notify("UI Notice", str(val), is_error=True)
         except Exception:
             pass

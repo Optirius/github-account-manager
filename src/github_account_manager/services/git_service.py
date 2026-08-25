@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 
 from github_account_manager.config import BACKUP_DIR, DEFAULT_GITCONFIG
 from github_account_manager.models import Account, FolderMapping, sanitize_git_string
+from github_account_manager.utils import safe_subprocess_run
 
 logger = logging.getLogger(__name__)
 
@@ -216,7 +217,7 @@ class GitService:
         }
 
         try:
-            cmd_name = subprocess.run(
+            cmd_name = safe_subprocess_run(
                 ["git", "-C", str(p), "config", "user.name"],
                 capture_output=True,
                 text=True,
@@ -225,7 +226,7 @@ class GitService:
             )
             result["user_name"] = cmd_name.stdout.strip()
 
-            cmd_email = subprocess.run(
+            cmd_email = safe_subprocess_run(
                 ["git", "-C", str(p), "config", "user.email"],
                 capture_output=True,
                 text=True,
@@ -234,7 +235,7 @@ class GitService:
             )
             result["user_email"] = cmd_email.stdout.strip()
 
-            cmd_ssh = subprocess.run(
+            cmd_ssh = safe_subprocess_run(
                 ["git", "-C", str(p), "config", "core.sshCommand"],
                 capture_output=True,
                 text=True,

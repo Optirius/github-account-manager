@@ -1,4 +1,5 @@
-"""Universal Cross-Platform Build & Packaging Script for Windows, macOS, and Linux."""
+"""Universal Cross-Platform Build & Packaging Script producing Single-File Standalone Executables."""
+import argparse
 import os
 from pathlib import Path
 import platform
@@ -6,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+from typing import Optional
 import zipfile
 
 # Ensure stdout/stderr handles UTF-8 safely without crashing on CP1252
@@ -51,7 +53,7 @@ def resolve_version() -> str:
 
 def run_pyinstaller(target_os: str):
     version = resolve_version()
-    print(f"[BUILD] Packaging for {target_os.upper()} (Version: v{version})...")
+    print(f"[BUILD] Packaging Single Standalone Executable for {target_os.upper()} (Version: v{version})...")
 
     ctk_path = Path(customtkinter.__file__).parent
     sep = ";" if target_os == "windows" else ":"
@@ -67,6 +69,7 @@ def run_pyinstaller(target_os: str):
         "PyInstaller",
         "--noconfirm",
         "--clean",
+        "--onefile",
         "--name",
         "github-account-manager",
         "--windowed",
@@ -96,49 +99,102 @@ def run_pyinstaller(target_os: str):
     print("[OK] PyInstaller build completed successfully.")
 
 
-def create_release_archive(target_os: str):
+def create_release_archive(target_os: str) -> Path:
     dist_dir = Path("dist")
-    app_dir = dist_dir / "github-account-manager"
-
-    if not app_dir.exists():
-        print(f"[ERROR] Output directory not found: {app_dir}")
-        sys.exit(1)
-
-    print(f"[PACKAGE] Compressing release archive for {target_os}...")
 
     if target_os == "windows":
+        exe_file = dist_dir / "github-account-manager.exe"
+        if not exe_file.exists():
+            print(f"[ERROR] Output executable not found: {exe_file}")
+            sys.exit(1)
+
+        print(f"[PACKAGE] Compressing release archive for {target_os}...")
         archive_name = dist_dir / "github-account-manager-windows-x64.zip"
         with zipfile.ZipFile(archive_name, "w", zipfile.ZIP_DEFLATED) as zf:
-            for root, _, files in os.walk(app_dir):
-                for file in files:
-                    full_p = Path(root) / file
-                    rel_p = full_p.relative_to(dist_dir)
-                    zf.write(full_p, arcname=str(rel_p))
+            zf.write(exe_file, arcname=exe_file.name)
         print(f"[OK] Created Windows Release: {archive_name}")
+        return archive_name
 
     elif target_os == "macos":
+        app_file = dist_dir / "github-account-manager.app"
+        if not app_file.exists():
+            app_file = dist_dir / "github-account-manager"
         archive_name = dist_dir / "github-account-manager-macos.zip"
         with zipfile.ZipFile(archive_name, "w", zipfile.ZIP_DEFLATED) as zf:
-            for root, _, files in os.walk(app_dir):
-                for file in files:
-                    full_p = Path(root) / file
-                    rel_p = full_p.relative_to(dist_dir)
-                    zf.write(full_p, arcname=str(rel_p))
+            if app_file.is_dir():
+                for root, _, files in os.walk(app_file):
+                    for file in files:
+                        full_p = Path(root) / file
+                        rel_p = full_p.relative_to(dist_dir)
+                        zf.write(full_p, arcname=str(rel_p))
+            else:
+                zf.write(app_file, arcname=app_file.name)
         print(f"[OK] Created macOS Release: {archive_name}")
+        return archive_name
 
     elif target_os == "linux":
+        bin_file = dist_dir / "github-account-manager"
         archive_name = dist_dir / "github-account-manager-linux-x64.tar.gz"
         with tarfile.open(archive_name, "w:gz") as tar:
-            tar.add(app_dir, arcname="github-account-manager")
+            tar.add(bin_file, arcname="github-account-manager")
         print(f"[OK] Created Linux Release: {archive_name}")
+        return archive_name
+
+    return dist_dir
+
+
+def publish_artifacts(target_os: str, archive_path: Path, publish_dir_str: Optional[str] = None):
+    pub_dir = None
+    if publish_dir_str:
+        pub_dir = Path(publish_dir_str)
+    elif os.getenv("PUBLISH_DIR"):
+        pub_dir = Path(os.getenv("PUBLISH_DIR"))
+    elif target_os == "windows":
+        candidate = Path("D:/Professional/Publish")
+        if candidate.parent.exists():
+            pub_dir = candidate
+
+    if not pub_dir:
+        return
+
+    print(f"[PUBLISH] Publishing build output to: {pub_dir}...")
+    pub_dir.mkdir(parents=True, exist_ok=True)
+
+    # Clean up old batch launcher or folders if present
+    old_bat = pub_dir / "Launch-App.bat"
+    if old_bat.exists():
+        old_bat.unlink()
+    old_folder = pub_dir / "github-account-manager"
+    if old_folder.is_dir():
+        shutil.rmtree(old_folder, ignore_errors=True)
+
+    # Copy single standalone executable directly to Publish root
+    dist_dir = Path("dist")
+    if target_os == "windows":
+        exe_file = dist_dir / "github-account-manager.exe"
+        if exe_file.exists():
+            dest_exe = pub_dir / "github-account-manager.exe"
+            shutil.copy2(exe_file, dest_exe)
+            print(f"[OK] Copied standalone executable directly to: {dest_exe}")
+
+    # Copy archive file
+    if archive_path and archive_path.exists():
+        dest_archive = pub_dir / archive_path.name
+        shutil.copy2(archive_path, dest_archive)
+        print(f"[OK] Copied release archive to: {dest_archive}")
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Cross-platform build and packaging script.")
+    parser.add_argument("--publish-dir", default=None, help="Directory to copy release artifacts to.")
+    args = parser.parse_args()
+
     target_os = get_target_platform()
     clean_build_artifacts()
     run_pyinstaller(target_os)
-    create_release_archive(target_os)
-    print("[SUCCESS] All packaging steps completed successfully!")
+    archive = create_release_archive(target_os)
+    publish_artifacts(target_os, archive, args.publish_dir)
+    print("[SUCCESS] All build and release steps completed successfully!")
 
 
 if __name__ == "__main__":

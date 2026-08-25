@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 import logging
 
 from github_account_manager.platform.base import PlatformAdapter
+from github_account_manager.utils import safe_subprocess_run
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +132,7 @@ class MacOSPlatformAdapter(PlatformAdapter):
     def list_git_credentials(self) -> List[Dict[str, Any]]:
         credentials = []
         try:
-            res = subprocess.run(
+            res = safe_subprocess_run(
                 ["security", "find-internet-password", "-s", "github.com"],
                 capture_output=True,
                 text=True,
@@ -153,7 +154,7 @@ class MacOSPlatformAdapter(PlatformAdapter):
 
     def delete_git_credential(self, target: str) -> bool:
         try:
-            res = subprocess.run(
+            res = safe_subprocess_run(
                 ["security", "delete-internet-password", "-s", "github.com"],
                 capture_output=True,
                 text=True,

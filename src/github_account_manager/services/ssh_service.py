@@ -8,6 +8,7 @@ from typing import List, Optional, Tuple
 
 from github_account_manager.config import DEFAULT_SSH_DIR
 from github_account_manager.models import SSHKeyInfo
+from github_account_manager.utils import safe_subprocess_run
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +99,7 @@ class SSHService:
     def get_fingerprint(self, path: Path | str) -> Optional[str]:
         """Run ssh-keygen -l to retrieve fingerprint."""
         try:
-            res = subprocess.run(
+            res = safe_subprocess_run(
                 ["ssh-keygen", "-l", "-f", str(path)],
                 capture_output=True,
                 text=True,
@@ -166,7 +167,7 @@ class SSHService:
         if clean_type == "rsa":
             cmd.extend(["-b", str(max(2048, min(bits, 8192)))])
 
-        res = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=15)
+        res = safe_subprocess_run(cmd, capture_output=True, text=True, check=False, timeout=15)
         if res.returncode != 0:
             raise RuntimeError(f"ssh-keygen failed: {res.stderr or res.stdout}")
 
@@ -211,7 +212,7 @@ class SSHService:
         ]
 
         try:
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=12)
+            res = safe_subprocess_run(cmd, capture_output=True, text=True, timeout=12)
             output = (res.stderr + "\n" + res.stdout).strip()
 
             # GitHub returns exit code 1 even when auth succeeds

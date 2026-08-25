@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 import logging
 
 from github_account_manager.platform.base import PlatformAdapter
+from github_account_manager.utils import safe_subprocess_run
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +134,7 @@ class LinuxPlatformAdapter(PlatformAdapter):
         # Check secret-tool
         if shutil.which("secret-tool"):
             try:
-                res = subprocess.run(
+                res = safe_subprocess_run(
                     ["secret-tool", "search", "service", "git"],
                     capture_output=True,
                     text=True,
@@ -164,7 +165,7 @@ class LinuxPlatformAdapter(PlatformAdapter):
         # If secret-tool
         if shutil.which("secret-tool"):
             try:
-                subprocess.run(
+                safe_subprocess_run(
                     ["secret-tool", "clear", "service", "git"],
                     capture_output=True,
                     text=True,

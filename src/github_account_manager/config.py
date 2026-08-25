@@ -13,11 +13,14 @@ def _resolve_app_version() -> str:
 
     try:
         import subprocess
+        import sys
+        kw = {"creationflags": 0x08000000} if sys.platform == "win32" else {}
         res = subprocess.run(
             ["git", "rev-list", "--count", "HEAD"],
             capture_output=True,
             text=True,
             timeout=2,
+            **kw,
         )
         if res.returncode == 0 and res.stdout.strip().isdigit():
             return f"0.1.{res.stdout.strip()}"

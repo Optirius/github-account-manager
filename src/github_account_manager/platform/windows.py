@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 import logging
 
 from github_account_manager.platform.base import PlatformAdapter
+from github_account_manager.utils import safe_subprocess_run
 
 logger = logging.getLogger(__name__)
 
@@ -141,7 +142,7 @@ class WindowsPlatformAdapter(PlatformAdapter):
     def list_git_credentials(self) -> List[Dict[str, Any]]:
         credentials = []
         try:
-            res = subprocess.run(["cmdkey", "/list"], capture_output=True, text=True, timeout=5)
+            res = safe_subprocess_run(["cmdkey", "/list"], capture_output=True, text=True, timeout=5)
             if res.returncode == 0:
                 raw_entries = res.stdout.split("----------------------------------")
                 for entry in raw_entries:
@@ -167,7 +168,7 @@ class WindowsPlatformAdapter(PlatformAdapter):
 
     def delete_git_credential(self, target: str) -> bool:
         try:
-            res = subprocess.run(["cmdkey", f"/delete:{target}"], capture_output=True, text=True, timeout=5)
+            res = safe_subprocess_run(["cmdkey", f"/delete:{target}"], capture_output=True, text=True, timeout=5)
             return res.returncode == 0
         except Exception as e:
             logger.error(f"Failed to delete Windows credential '{target}': {e}")

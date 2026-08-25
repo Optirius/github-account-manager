@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from github_account_manager.models import FolderMapping
 from github_account_manager.platform import PlatformAdapter, get_platform_adapter
+from github_account_manager.utils import safe_subprocess_run
 
 logger = logging.getLogger(__name__)
 
@@ -267,7 +268,7 @@ class AppIntegrationService:
     def _get_repo_remote_url(self, repo_path: Path) -> Optional[str]:
         """Query git remote get-url origin for a repository."""
         try:
-            res = subprocess.run(
+            res = safe_subprocess_run(
                 ["git", "-C", str(repo_path), "remote", "get-url", "origin"],
                 capture_output=True,
                 text=True,
@@ -330,7 +331,7 @@ class AppIntegrationService:
             return True, f"Remote is already using {to_protocol.upper()} ({new_url})."
 
         try:
-            res = subprocess.run(
+            res = safe_subprocess_run(
                 ["git", "-C", str(p), "remote", "set-url", "origin", new_url],
                 capture_output=True,
                 text=True,
