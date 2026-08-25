@@ -1,0 +1,26 @@
+[project]
+name = "github-account-manager"
+version = "0.1.0"
+description = "Secure Desktop GUI Multi-Account Manager for GitHub with Python and uv"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "customtkinter>=6.0.0",
+    "httpx>=0.28.1",
+    "keyring>=25.7.0",
+    "packaging>=26.3",
+    "pillow>=12.3.0",
+    "pydantic>=2.13.4",
+]
+
+[project.scripts]
+github-account-manager = "github_account_manager.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
