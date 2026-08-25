@@ -99,8 +99,8 @@ class App(ctk.CTk):
         nav_items = [
             ("guide", "📖  Guide & Quickstart"),
             ("accounts", "👤  Accounts & Profiles"),
-            ("folders", "📁  Directory Mappings"),
             ("ssh", "🔑  SSH Keys"),
+            ("folders", "📁  Directory Mappings"),
             ("apps", "🧩  Apps & Integrations"),
             ("inspector", "🔍  Git Inspector"),
             ("settings", "⚙️  Settings & Backups"),
