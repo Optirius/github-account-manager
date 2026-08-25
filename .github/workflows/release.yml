@@ -11,6 +11,10 @@ on:
 permissions:
   contents: write
 
+env:
+  PYTHONIOENCODING: "utf-8"
+  PYTHONUTF8: "1"
+
 jobs:
   determine-version:
     name: Determine Commit-Driven Version

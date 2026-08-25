@@ -75,10 +75,8 @@ class FolderMapping(BaseModel):
     @property
     def normalized_path(self) -> str:
         """Returns standard Git-compatible forward-slash path with a trailing slash."""
-        p = Path(self.folder_path).as_posix()
-        if not p.endswith("/"):
-            p += "/"
-        return p
+        raw = self.folder_path.replace("\\", "/").rstrip("/")
+        return f"{raw}/" if raw else "/"
 
 
 class SSHKeyInfo(BaseModel):

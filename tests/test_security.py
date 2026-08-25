@@ -1,3 +1,5 @@
+import sys
+import pytest
 from github_account_manager.models import Account, FolderMapping, sanitize_git_string
 from github_account_manager.services.github_service import redact_token_from_string
 from github_account_manager.services.keyring_service import mask_token, DPAPIFallback
@@ -39,6 +41,7 @@ def test_mask_token():
     assert mask_token(None) == ""
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="DPAPI is Windows-specific")
 def test_dpapi_fallback_encryption():
     secret = "ghp_super_secret_pat_token_value_12345"
     encrypted = DPAPIFallback.encrypt(secret)
