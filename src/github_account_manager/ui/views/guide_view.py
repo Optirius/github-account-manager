@@ -1,4 +1,4 @@
-"""Guide View explaining the zero-switching architecture and step-by-step app setup."""
+"""Guide View explaining the zero-switching architecture in simple, beginner-friendly language."""
 from typing import Callable, Optional
 import customtkinter as ctk
 
@@ -6,22 +6,17 @@ from github_account_manager.ui.theme import (
     ACCENT_BLUE,
     ACCENT_BLUE_HOVER,
     ACCENT_GREEN,
-    ACCENT_GREEN_HOVER,
     ACCENT_ORANGE,
     BG_CARD,
     BG_INSET,
     BORDER_COLOR,
     BTN_SECONDARY_BG,
     BTN_SECONDARY_HOVER,
-    BTN_SECONDARY_TEXT,
     FONT_BODY,
     FONT_BODY_BOLD,
     FONT_HEADING,
-    FONT_MONO_SMALL,
     FONT_SMALL,
-    FONT_SMALL_BOLD,
     FONT_SUBHEADING,
-    TEXT_MUTED,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
 )
@@ -46,14 +41,14 @@ class GuideView(ctk.CTkFrame):
 
         ctk.CTkLabel(
             header,
-            text="User Guide & Zero-Switching Architecture",
+            text="📖 Simple Guide & Quickstart",
             font=FONT_HEADING,
             text_color=TEXT_PRIMARY,
         ).pack(anchor="w")
 
         ctk.CTkLabel(
             header,
-            text="Understand how automatic Git account routing works and how to set it up step-by-step.",
+            text="Learn how to use multiple GitHub accounts smoothly without ever switching manually.",
             font=FONT_BODY,
             text_color=TEXT_SECONDARY,
         ).pack(anchor="w", pady=(3, 0))
@@ -62,41 +57,39 @@ class GuideView(ctk.CTkFrame):
         scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
         scroll.pack(fill="both", expand=True, padx=25, pady=(10, 20))
 
-        # --- Section 1: The Core Concept: Zero-Switching ---
+        # --- Section 1: How It Works in 1 Minute ---
         hero_card = ctk.CTkFrame(scroll, fg_color=BG_CARD, corner_radius=10, border_width=1, border_color=BORDER_COLOR)
         hero_card.pack(fill="x", pady=(0, 16))
 
         ctk.CTkLabel(
             hero_card,
-            text="🌟 The Core Concept: Never Switch Accounts Manually Again",
+            text="💡 The Main Idea: Work in Separate Folders",
             font=FONT_SUBHEADING,
             text_color=TEXT_PRIMARY,
         ).pack(anchor="w", padx=18, pady=(16, 6))
 
-        concept_p1 = (
-            "Most developers struggle with multi-account setups because they try to switch accounts manually, "
-            "re-configure Git per repository, or use confusing SSH host alias tricks in clone URLs.\n\n"
-            "This application uses a Zero-Switching Architecture powered by Git's native conditional routing: "
-            "You assign root workspace directories (e.g. D:/Personal and D:/Professional) to account profiles once. "
-            "From then on, Git automatically detects which folder you are working in and applies the correct commit author, "
-            "email, and SSH key on the fly."
+        concept_text = (
+            "Instead of switching accounts back and forth every time you open a project, you simply separate your projects by folder:\n\n"
+            "• Put your personal projects in your Personal folder (e.g. D:/Personal)\n"
+            "• Put your work projects in your Work folder (e.g. D:/Professional)\n\n"
+            "Git will automatically detect which folder you are in. When you make a commit or push, Git uses the correct name, email, and SSH key automatically. You never have to switch accounts by hand again!"
         )
         ctk.CTkLabel(
             hero_card,
-            text=concept_p1,
+            text=concept_text,
             font=FONT_BODY,
             text_color=TEXT_SECONDARY,
             justify="left",
             wraplength=760,
         ).pack(anchor="w", padx=18, pady=(0, 16))
 
-        # --- Section 2: Why You Need This App ---
+        # --- Section 2: Why This App Helps ---
         compare_card = ctk.CTkFrame(scroll, fg_color=BG_CARD, corner_radius=10, border_width=1, border_color=BORDER_COLOR)
         compare_card.pack(fill="x", pady=(0, 16))
 
         ctk.CTkLabel(
             compare_card,
-            text="🤔 Do You Need This Application?",
+            text="❓ Common Problems & How This App Fixes Them",
             font=FONT_SUBHEADING,
             text_color=TEXT_PRIMARY,
         ).pack(anchor="w", padx=18, pady=(16, 8))
@@ -109,75 +102,70 @@ class GuideView(ctk.CTkFrame):
         # Without app
         bad_box = ctk.CTkFrame(grid_box, fg_color=BG_INSET, corner_radius=8, border_width=1, border_color=BORDER_COLOR)
         bad_box.grid(row=0, column=0, sticky="nsew", padx=(0, 8), pady=4)
-        ctk.CTkLabel(bad_box, text="❌ Without This App (The Pain):", font=FONT_BODY_BOLD, text_color=ACCENT_ORANGE).pack(anchor="w", padx=14, pady=(12, 6))
+        ctk.CTkLabel(bad_box, text="❌ Without This App:", font=FONT_BODY_BOLD, text_color=ACCENT_ORANGE).pack(anchor="w", padx=14, pady=(12, 6))
         bad_points = (
-            "• Personal emails leak into workplace repositories.\n"
-            "• VS Code uses your work login and denies access to personal repos.\n"
-            "• You have to run 'git config user.email' for every new project.\n"
-            "• SSH authentication fails on port 22 due to firewalls or ISP blocks.\n"
-            "• Confusing URL rewrites like 'git@github-personal:...'"
+            "• Personal email accidentally shows up on work commits.\n"
+            "• VS Code, Rider, or Visual Studio tries to use the wrong GitHub login.\n"
+            "• You have to type 'git config user.email' for every new project.\n"
+            "• Office or hotel Wi-Fi blocks SSH on port 22.\n"
+            "• 'Permission Denied (publickey)' errors when pushing code."
         )
         ctk.CTkLabel(bad_box, text=bad_points, font=FONT_SMALL, text_color=TEXT_SECONDARY, justify="left").pack(anchor="w", padx=14, pady=(0, 12))
 
         # With app
         good_box = ctk.CTkFrame(grid_box, fg_color=BG_INSET, corner_radius=8, border_width=1, border_color=BORDER_COLOR)
         good_box.grid(row=0, column=1, sticky="nsew", padx=(8, 0), pady=4)
-        ctk.CTkLabel(good_box, text="✅ With This App (Zero Friction):", font=FONT_BODY_BOLD, text_color=ACCENT_GREEN).pack(anchor="w", padx=14, pady=(12, 6))
+        ctk.CTkLabel(good_box, text="✅ With This App:", font=FONT_BODY_BOLD, text_color=ACCENT_GREEN).pack(anchor="w", padx=14, pady=(12, 6))
         good_points = (
-            "• 100% automated: Work in D:/Personal -> commits as Personal.\n"
-            "• Work in D:/Professional -> commits as Professional.\n"
-            "• 1-Click IDE isolation prevents VS Code from overriding folders.\n"
-            "• Standard 'git@github.com:...' remotes with port 443 reliability.\n"
-            "• Zero account switching, zero prompts, zero credential confusion."
+            "• 100% Automatic: Work in Personal folder -> Commits as Personal.\n"
+            "• Work in Work folder -> Commits as Work.\n"
+            "• 1-Click to stop code editors from interfering with your Git identity.\n"
+            "• SSH works reliably anywhere (includes port 443 fallback).\n"
+            "• Zero account switching, zero prompts, zero confusion."
         )
         ctk.CTkLabel(good_box, text=good_points, font=FONT_SMALL, text_color=TEXT_SECONDARY, justify="left").pack(anchor="w", padx=14, pady=(0, 12))
 
-        # --- Section 3: 5-Step Setup Walkthrough ---
+        # --- Section 3: Easy 5-Step Setup ---
         steps_card = ctk.CTkFrame(scroll, fg_color=BG_CARD, corner_radius=10, border_width=1, border_color=BORDER_COLOR)
         steps_card.pack(fill="x", pady=(0, 16))
 
         ctk.CTkLabel(
             steps_card,
-            text="🚀 5-Step Setup Guide (Page by Page)",
+            text="🚀 Easy 5-Step Setup",
             font=FONT_SUBHEADING,
             text_color=TEXT_PRIMARY,
         ).pack(anchor="w", padx=18, pady=(16, 10))
 
         steps = [
             (
-                "Step 1: 👤 Accounts & Profiles",
-                "Define your identity profiles (e.g. 'Personal' and 'Professional'). "
-                "Set your exact Git Author Name (e.g. Tahmid Hossain) and Git Commit Email for each profile.",
+                "Step 1: 👤 Add Your Accounts",
+                "Create your profiles (for example: 'Personal' and 'Work'). Enter your name and commit email for each account.",
                 "accounts",
-                "👉 Open Accounts Tab",
+                "👉 Go to Accounts",
             ),
             (
-                "Step 2: 🔑 SSH Key Management",
-                "Create high-security ED25519 SSH keys for your profiles. Click '📋 Copy Key' and add it to your GitHub account (Settings > SSH and GPG keys). "
-                "Use '⚡ Test Connection' to verify live authentication.",
+                "Step 2: 🔑 Create & Link SSH Keys",
+                "Generate a key for each profile. Click 'Copy Key', open github.com/settings/keys in your browser, and paste the key. Then click 'Test Connection' to confirm it works.",
                 "ssh",
-                "👉 Open SSH Keys Tab",
+                "👉 Go to SSH Keys",
             ),
             (
-                "Step 3: 📁 Directory Mappings",
-                "Map your workspace root directories (e.g. D:/Personal and D:/Professional) to their corresponding profile. "
-                "Git automatically injects conditional includes so all repositories inside inherit the profile.",
+                "Step 3: 📁 Choose Your Folders",
+                "Pick the main folders on your computer for each account:\n• Example: D:/Personal -> Personal Profile\n• Example: D:/Professional -> Work Profile",
                 "folders",
-                "👉 Open Folders Tab",
+                "👉 Go to Folders",
             ),
             (
-                "Step 4: 🧩 External Apps & IDE Isolation",
-                "External code editors (VS Code, Cursor) often inject their logged-in account and Windows Credential Manager caches global HTTPS tokens.\n"
-                "• Click '⚡ Apply Isolation to All IDEs' to stop editors from hijacking Git.\n"
-                "• Click '🚀 Convert All HTTPS Repos to SSH' to route repositories through clean SSH.",
+                "Step 4: 🧩 Connect External Apps & IDEs",
+                "Code editors (like VS Code, Rider, Visual Studio, and Cursor) sometimes try to use their own global login.\n• Click 'Apply Isolation' to stop editors from overriding your folder accounts.\n• Click 'Convert All Repos to SSH' so your projects use clean SSH keys.",
                 "apps",
-                "👉 Open Apps Tab",
+                "👉 Go to Apps",
             ),
             (
-                "Step 5: 🔍 Git & Directory Inspector",
-                "Browse or paste any folder path to verify what Git author identity and SSH key Git will use in real time.",
+                "Step 5: 🔍 Double-Check with Inspector",
+                "Pick any folder to verify that Git will use the exact name, email, and SSH key you expect.",
                 "inspector",
-                "👉 Open Inspector Tab",
+                "👉 Go to Inspector",
             ),
         ]
 
@@ -196,7 +184,7 @@ class GuideView(ctk.CTkFrame):
                     text=btn_text,
                     font=FONT_SMALL,
                     height=28,
-                    width=150,
+                    width=140,
                     fg_color=BTN_SECONDARY_BG,
                     hover_color=BTN_SECONDARY_HOVER,
                     text_color=ACCENT_BLUE,
@@ -215,23 +203,26 @@ class GuideView(ctk.CTkFrame):
                 wraplength=730,
             ).pack(anchor="w", padx=14, pady=(0, 10))
 
-        # --- Section 4: Daily Workflow ---
+        # --- Section 4: Daily Use ---
         daily_card = ctk.CTkFrame(scroll, fg_color=BG_CARD, corner_radius=10, border_width=1, border_color=BORDER_COLOR)
         daily_card.pack(fill="x", pady=(0, 16))
 
         ctk.CTkLabel(
             daily_card,
-            text="⚡ Daily Workflow: How You Work Going Forward",
+            text="⚡ How You Work Every Day",
             font=FONT_SUBHEADING,
             text_color=TEXT_PRIMARY,
         ).pack(anchor="w", padx=18, pady=(16, 6))
 
         daily_desc = (
-            "Once setup is complete, you do NOT need to open this app every day.\n\n"
-            "1. When working on personal projects, clone or place them in your Personal directory (e.g. D:/Personal/Projects/my-app).\n"
-            "2. When working on company or client projects, clone or place them in your Work directory (e.g. D:/Professional/Projects/work-app).\n"
-            "3. Use Git normally via terminal, VS Code, Cursor, or any GUI: 'git commit -m \"feat: new feature\"' & 'git push'.\n\n"
-            "Git natively commits with the right email and authenticates with the right SSH key without a single click or prompt!"
+            "Once setup is finished, you don't need to open this app every day:\n\n"
+            "1. Put personal projects in your Personal folder.\n"
+            "2. Put work projects in your Work folder.\n"
+            "3. Commit and push normally in terminal, VS Code, Rider, or any tool:\n"
+            "   git add .\n"
+            "   git commit -m \"My changes\"\n"
+            "   git push\n\n"
+            "Git will automatically use the right email and SSH key every single time!"
         )
         ctk.CTkLabel(
             daily_card,

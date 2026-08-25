@@ -63,3 +63,16 @@ def test_app_integration_service_with_custom_adapter(tmp_path):
     settings_file = tmp_path / "vscode" / "settings.json"
     assert settings_file.exists()
     assert "github.gitAuthentication" in settings_file.read_text(encoding="utf-8")
+
+
+def test_macos_and_linux_dynamic_detection():
+    mac = MacOSPlatformAdapter()
+    mac_apps = mac.detect_installed_apps()
+    assert isinstance(mac_apps, list)
+
+    lin = LinuxPlatformAdapter()
+    lin_apps = lin.detect_installed_apps()
+    assert isinstance(lin_apps, list)
+
+    assert isinstance(mac.get_ide_github_accounts(), list)
+    assert isinstance(lin.get_ide_github_accounts(), list)

@@ -201,6 +201,10 @@ class AppIntegrationService:
 
         return deleted_count, messages
 
+    def get_ide_github_accounts(self) -> List[Dict[str, Any]]:
+        """Return GitHub accounts logged in to external IDEs (such as JetBrains Rider / IntelliJ / PyCharm)."""
+        return self.platform.get_ide_github_accounts()
+
     # --- Repository Remote Scanner & HTTPS -> SSH Protocol Converter ---
 
     def scan_repositories(self, folder_mappings: List[FolderMapping]) -> List[Dict[str, Any]]:

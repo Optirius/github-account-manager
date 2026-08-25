@@ -52,3 +52,7 @@ class PlatformAdapter(ABC):
     def get_system_font_family(self) -> str:
         """Return preferred native system UI font family for this OS."""
         pass
+
+    def get_ide_github_accounts(self) -> List[Dict[str, Any]]:
+        """Extract GitHub accounts configured inside external IDEs (such as JetBrains Rider / IntelliJ)."""
+        return []

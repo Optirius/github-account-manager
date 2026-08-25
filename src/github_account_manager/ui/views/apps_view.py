@@ -93,10 +93,11 @@ class AppsView(ctk.CTkFrame):
             apps = self.manager.app_service.detect_all_installed_apps()
             creds = self.manager.app_service.list_windows_git_credentials()
             repos = self.manager.app_service.scan_repositories(self.manager.settings.folder_mappings)
-            return apps, creds, repos
+            ide_accounts = self.manager.app_service.get_ide_github_accounts()
+            return apps, creds, repos, ide_accounts
 
         def on_done(data):
-            apps, creds, repos = data
+            apps, creds, repos, ide_accounts = data
             for widget in self.scroll.winfo_children():
                 widget.destroy()
 
@@ -104,11 +105,14 @@ class AppsView(ctk.CTkFrame):
             InfoBanner(
                 self.scroll,
                 title="How App & IDE Isolation Works",
-                what_it_does="Discovers external code editors, clears cached Windows credentials, and converts repo remotes to dedicated SSH aliases.",
-                why_needed="IDEs (like VS Code/Cursor) and Windows Credential Manager inject global credentials that override local folder rules and cause 'Permission Denied' errors.",
-                how_it_works="Disables built-in IDE Git authentication ('github.gitAuthentication: false') and switches repository remotes to dedicated SSH host aliases.",
+                what_it_does="Discovers external code editors (VS Code, Visual Studio, JetBrains Rider, etc.), clears cached Windows credentials, and converts repo remotes to dedicated SSH aliases.",
+                why_needed="IDEs and Windows Credential Manager inject global credentials that override local folder rules and cause 'Permission Denied' errors.",
+                how_it_works="Disables built-in IDE Git authentication and switches repository remotes to dedicated SSH host aliases so every tool respects your directory profile.",
                 icon="🧩",
             ).pack(fill="x", pady=(0, 15))
+
+            if ide_accounts:
+                self._render_ide_accounts_section(ide_accounts)
 
             self._render_detected_apps_section(apps)
             self._render_credentials_section(creds)
@@ -122,6 +126,50 @@ class AppsView(ctk.CTkFrame):
             loading_text="⏳ Scanning...",
             error_title="App Scan Error",
         )
+
+    # --- Section 0: IDE Configured GitHub Accounts ---
+
+    def _render_ide_accounts_section(self, ide_accounts: list):
+        card = ctk.CTkFrame(self.scroll, fg_color=BG_CARD, corner_radius=8, border_width=1, border_color=BORDER_COLOR)
+        card.pack(fill="x", pady=(0, 16))
+
+        header = ctk.CTkFrame(card, fg_color="transparent")
+        header.pack(fill="x", padx=18, pady=(16, 6))
+
+        ctk.CTkLabel(
+            header,
+            text=f"🔑  IDE Configured GitHub Accounts ({len(ide_accounts)} detected)",
+            font=FONT_SUBHEADING,
+            text_color=TEXT_PRIMARY,
+        ).pack(side="left")
+
+        body = ctk.CTkFrame(card, fg_color="transparent")
+        body.pack(fill="x", padx=18, pady=(0, 14))
+
+        ctk.CTkLabel(
+            body,
+            text="GitHub accounts logged in directly inside external IDE settings (e.g. JetBrains Rider, IntelliJ IDEA, PyCharm).\n"
+                 "To ensure Git pushes use your directory-mapped profile, verify your repositories use SSH remotes.",
+            font=FONT_BODY,
+            text_color=TEXT_SECONDARY,
+            justify="left",
+        ).pack(anchor="w", pady=(0, 10))
+
+        for acc in ide_accounts:
+            row = ctk.CTkFrame(body, fg_color=BG_INSET, corner_radius=6, border_width=1, border_color=BORDER_COLOR)
+            row.pack(fill="x", pady=3)
+
+            top = ctk.CTkFrame(row, fg_color="transparent")
+            top.pack(fill="x", padx=12, pady=8)
+
+            ctk.CTkLabel(
+                top,
+                text=f"👤  {acc['account']}",
+                font=FONT_BODY_BOLD,
+                text_color=TEXT_PRIMARY,
+            ).pack(side="left")
+
+            StatusBadge(top, acc["source"], "info").pack(side="right")
 
     # --- Section 1: Auto-Discovered Applications ---
 

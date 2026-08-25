@@ -3,7 +3,6 @@ import os
 from pathlib import Path
 import re
 import shutil
-import subprocess
 from typing import Any, Dict, List, Optional
 import logging
 
@@ -39,11 +38,19 @@ class MacOSPlatformAdapter(PlatformAdapter):
         return ide_map.get(ide_id.lower(), [])
 
     def detect_installed_apps(self) -> List[Dict[str, Any]]:
+        """
+        Dynamically discover installed IDEs, Git clients, and developer tools
+        via macOS /Applications, ~/Applications, JetBrains paths, and PATH.
+        """
         app_dirs = [
             Path("/Applications"),
             Path.home() / "Applications",
+            Path.home() / "Applications" / "JetBrains Toolbox",
         ]
 
+        discovered: Dict[str, Dict[str, Any]] = {}
+
+        # 1. Primary Well-Known Definitions
         known_definitions = [
             {
                 "id": "vscode",
@@ -51,6 +58,38 @@ class MacOSPlatformAdapter(PlatformAdapter):
                 "category": "IDE / Editor",
                 "icon": "💻",
                 "app_bundles": ["Visual Studio Code.app", "Visual Studio Code - Insiders.app"],
+                "supports_isolation": True,
+            },
+            {
+                "id": "rider",
+                "name": "JetBrains Rider",
+                "category": "IDE / Editor",
+                "icon": "🔴",
+                "app_bundles": ["Rider.app", "JetBrains Rider.app"],
+                "supports_isolation": True,
+            },
+            {
+                "id": "idea",
+                "name": "JetBrains IntelliJ IDEA",
+                "category": "IDE / Editor",
+                "icon": "💡",
+                "app_bundles": ["IntelliJ IDEA.app", "IntelliJ IDEA CE.app"],
+                "supports_isolation": True,
+            },
+            {
+                "id": "pycharm",
+                "name": "JetBrains PyCharm",
+                "category": "IDE / Editor",
+                "icon": "🐍",
+                "app_bundles": ["PyCharm.app", "PyCharm CE.app"],
+                "supports_isolation": True,
+            },
+            {
+                "id": "visual_studio",
+                "name": "Visual Studio for Mac",
+                "category": "IDE / Editor",
+                "icon": "🟣",
+                "app_bundles": ["Visual Studio.app"],
                 "supports_isolation": True,
             },
             {
@@ -86,6 +125,30 @@ class MacOSPlatformAdapter(PlatformAdapter):
                 "supports_isolation": False,
             },
             {
+                "id": "gitkraken",
+                "name": "GitKraken",
+                "category": "Git GUI Client",
+                "icon": "🐙",
+                "app_bundles": ["GitKraken.app"],
+                "supports_isolation": False,
+            },
+            {
+                "id": "sourcetree",
+                "name": "Sourcetree",
+                "category": "Git GUI Client",
+                "icon": "🌳",
+                "app_bundles": ["Sourcetree.app"],
+                "supports_isolation": False,
+            },
+            {
+                "id": "sublime_merge",
+                "name": "Sublime Merge",
+                "category": "Git GUI Client",
+                "icon": "📑",
+                "app_bundles": ["Sublime Merge.app"],
+                "supports_isolation": False,
+            },
+            {
                 "id": "git_cli",
                 "name": "Git (Homebrew / Xcode)",
                 "category": "CLI / Engine",
@@ -95,12 +158,13 @@ class MacOSPlatformAdapter(PlatformAdapter):
             },
         ]
 
-        results = []
         for defn in known_definitions:
             installed = False
             exe_path = None
 
             for app_dir in app_dirs:
+                if not app_dir.exists():
+                    continue
                 for bundle in defn["app_bundles"]:
                     cand = app_dir / bundle
                     if cand.exists():
@@ -118,16 +182,62 @@ class MacOSPlatformAdapter(PlatformAdapter):
                 exe_path = shutil.which("git") or "/usr/bin/git"
 
             if installed:
-                results.append({
+                discovered[defn["id"]] = {
                     "id": defn["id"],
                     "name": defn["name"],
                     "category": defn["category"],
                     "icon": defn["icon"],
                     "exe_path": exe_path,
                     "supports_isolation": defn["supports_isolation"],
-                })
+                }
 
-        return results
+        # 2. Dynamic Bundle Scanner (Discovers all developer .app bundles)
+        keywords = ["git", "github", "studio", "rider", "intellij", "pycharm", "webstorm", "clion", "goland", "rustrover", "code", "cursor", "windsurf", "eclipse", "sublime", "sourcetree", "kraken", "xcode", "fleet", "positron"]
+        for app_dir in app_dirs:
+            if app_dir.exists():
+                try:
+                    for app_bundle in app_dir.glob("*.app"):
+                        bundle_name = app_bundle.stem
+                        name_l = bundle_name.lower()
+                        if any(k in name_l for k in keywords):
+                            app_id = re.sub(r"[^a-zA-Z0-9_]", "_", bundle_name.lower()).strip("_")
+                            if not any(d["name"].lower() == bundle_name.lower() for d in discovered.values()):
+                                is_git_gui = any(g in name_l for g in ["git", "github", "kraken", "sourcetree", "merge"])
+                                discovered[app_id] = {
+                                    "id": app_id,
+                                    "name": bundle_name,
+                                    "category": "Git GUI Client" if is_git_gui else "IDE / Editor",
+                                    "icon": "🐙" if is_git_gui else "💻",
+                                    "exe_path": str(app_bundle),
+                                    "supports_isolation": "code" in name_l or "cursor" in name_l or "windsurf" in name_l,
+                                }
+                except Exception:
+                    pass
+
+        return list(discovered.values())
+
+    def get_ide_github_accounts(self) -> List[Dict[str, Any]]:
+        """Extract GitHub accounts configured inside JetBrains IDE options on macOS."""
+        accounts: List[Dict[str, Any]] = []
+        jetbrains_dir = Path.home() / "Library" / "Application Support" / "JetBrains"
+        if jetbrains_dir.exists():
+            for xml_file in jetbrains_dir.glob("*/options/github.xml"):
+                try:
+                    ide_name = xml_file.parent.parent.name
+                    content = xml_file.read_text(encoding="utf-8", errors="ignore")
+                    for match in re.finditer(r'<account\s+[^>]*name="([^"]+)"', content):
+                        acc_name = match.group(1)
+                        server_m = re.search(r'<server\s+[^>]*host="([^"]+)"', content)
+                        server = server_m.group(1) if server_m else "github.com"
+                        accounts.append({
+                            "ide": ide_name,
+                            "account": acc_name,
+                            "server": server,
+                            "source": f"JetBrains ({ide_name})",
+                        })
+                except Exception:
+                    pass
+        return accounts
 
     def list_git_credentials(self) -> List[Dict[str, Any]]:
         credentials = []
