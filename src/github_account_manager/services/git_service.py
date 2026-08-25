@@ -63,7 +63,7 @@ class GitService:
             ssh_posix = Path(clean_ssh).as_posix()
             content_lines.extend([
                 "[core]",
-                f"\tsshCommand = ssh -i {ssh_posix}",
+                f"\tsshCommand = ssh -i {ssh_posix} -o IdentitiesOnly=yes",
             ])
 
         content_lines.append("")
@@ -99,7 +99,7 @@ class GitService:
         existing_text = ""
         if self.gitconfig_path.exists():
             try:
-                existing_text = self.gitconfig_path.read_text(encoding="utf-8")
+                existing_text = self.gitconfig_path.read_text(encoding="utf-8-sig")
             except Exception:
                 pass
 
