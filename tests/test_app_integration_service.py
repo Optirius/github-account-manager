@@ -20,28 +20,32 @@ def test_vscode_isolation_workflow(tmp_path):
     settings_file.write_text(json.dumps({"editor.fontSize": 14}), encoding="utf-8")
 
     service = AppIntegrationService()
-    with patch.object(AppIntegrationService, "vscode_settings_path", settings_file):
-        status = service.get_vscode_status()
-        assert status["installed"] is True
-        assert status["is_isolated"] is False
+    service.appdata = tmp_path
 
-        # Apply isolation
-        success, msg = service.apply_vscode_isolation()
-        assert success is True
+    apps = service.detect_all_installed_apps()
+    vscode_app = next((a for a in apps if a["id"] == "vscode"), None)
+    assert vscode_app is not None
+    assert vscode_app["installed"] is True
+    assert vscode_app["is_isolated"] is False
 
-        # Check updated settings
-        data = json.loads(settings_file.read_text(encoding="utf-8"))
-        assert data["github.gitAuthentication"] is False
-        assert data["git.terminalAuthentication"] is False
+    # Apply isolation
+    success, msg = service.apply_isolation_to_app("vscode")
+    assert success is True
 
-        status = service.get_vscode_status()
-        assert status["is_isolated"] is True
+    # Check updated settings
+    data = json.loads(settings_file.read_text(encoding="utf-8"))
+    assert data["github.gitAuthentication"] is False
+    assert data["git.terminalAuthentication"] is False
 
-        # Restore defaults
-        success, msg = service.restore_vscode_defaults()
-        assert success is True
-        data_restored = json.loads(settings_file.read_text(encoding="utf-8"))
-        assert "github.gitAuthentication" not in data_restored
+    apps_updated = service.detect_all_installed_apps()
+    vscode_app_updated = next(a for a in apps_updated if a["id"] == "vscode")
+    assert vscode_app_updated["is_isolated"] is True
+
+    # Restore defaults
+    success, msg = service.restore_defaults_for_app("vscode")
+    assert success is True
+    data_restored = json.loads(settings_file.read_text(encoding="utf-8"))
+    assert "github.gitAuthentication" not in data_restored
 
 
 def test_convert_repo_remote(tmp_path):
