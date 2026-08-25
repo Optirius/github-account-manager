@@ -4,8 +4,10 @@ import customtkinter as ctk
 
 from github_account_manager.models import FolderMapping
 from github_account_manager.services.manager import AccountManager
+from github_account_manager.ui.async_runner import run_async
 from github_account_manager.ui.components.dialogs import AddFolderMappingDialog
 from github_account_manager.ui.components.folder_row import FolderRow
+from github_account_manager.ui.components.info_banner import InfoBanner
 from github_account_manager.ui.theme import (
     ACCENT_GREEN,
     ACCENT_GREEN_HOVER,
@@ -64,7 +66,7 @@ class FoldersView(ctk.CTkFrame):
         btn_box = ctk.CTkFrame(header, fg_color="transparent")
         btn_box.pack(side="right")
 
-        sync_btn = ctk.CTkButton(
+        self.sync_btn = ctk.CTkButton(
             btn_box,
             text="🔄 Sync Git Now",
             width=125,
@@ -77,7 +79,7 @@ class FoldersView(ctk.CTkFrame):
             border_color=BORDER_COLOR,
             command=self._handle_sync,
         )
-        sync_btn.pack(side="left", padx=(0, 8))
+        self.sync_btn.pack(side="left", padx=(0, 8))
 
         add_btn = ctk.CTkButton(
             btn_box,
@@ -101,6 +103,16 @@ class FoldersView(ctk.CTkFrame):
     def refresh(self):
         for widget in self.rows_scroll.winfo_children():
             widget.destroy()
+
+        # Contextual explanation banner
+        InfoBanner(
+            self.rows_scroll,
+            title="How Directory Mappings Work",
+            what_it_does="Binds entire workspace directories (e.g. D:/Personal or D:/Professional) to a specific GitHub profile.",
+            why_needed="You never have to run 'git config user.email' manually again—Git automatically routes all repositories inside the folder to the correct profile.",
+            how_it_works="Injects conditional '[includeIf \"gitdir/i:...\"]' blocks into ~/.gitconfig so Git natively activates the right identity on the fly.",
+            icon="📁",
+        ).pack(fill="x", pady=(0, 15))
 
         mappings = self.manager.settings.folder_mappings
         accounts = {a.id: a for a in self.manager.settings.accounts}
@@ -155,5 +167,17 @@ class FoldersView(ctk.CTkFrame):
         self.refresh()
 
     def _handle_sync(self):
-        self.manager.sync_git()
-        self.on_notify("Git Synchronized", "Updated ~/.gitconfig with current directory rules.")
+        def task():
+            self.manager.sync_git()
+
+        def on_done(_):
+            self.on_notify("Git Synchronized", "Updated ~/.gitconfig & ~/.ssh/config with current directory rules.")
+
+        run_async(
+            self,
+            task_fn=task,
+            on_success=on_done,
+            loading_btn=self.sync_btn,
+            loading_text="⏳ Syncing...",
+            error_title="Git Sync Error",
+        )

@@ -6,6 +6,7 @@ import customtkinter as ctk
 
 from github_account_manager.config import BACKUP_DIR, DEFAULT_GITCONFIG
 from github_account_manager.services.manager import AccountManager
+from github_account_manager.ui.components.info_banner import InfoBanner
 from github_account_manager.ui.theme import (
     ACCENT_BLUE,
     ACCENT_BLUE_HOVER,
@@ -57,6 +58,16 @@ class SettingsView(ctk.CTkFrame):
 
         scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
         scroll.pack(fill="both", expand=True, padx=25, pady=(10, 20))
+
+        # Contextual explanation banner
+        InfoBanner(
+            scroll,
+            title="How Git Config Synchronization & Backups Work",
+            what_it_does="Manages automatic ~/.gitconfig writing, visual themes, and safe snapshot backups.",
+            why_needed="Ensures your Git settings stay in sync with zero risk of corruption—you can rollback anytime with 1-click snapshots.",
+            how_it_works="Performs atomic file replacement and stores the last 15 versions in ~/.github_account_manager/backups/.",
+            icon="⚙️",
+        ).pack(fill="x", pady=(0, 15))
 
         # App Preferences Card
         pref_card = ctk.CTkFrame(scroll, fg_color=BG_CARD, corner_radius=8, border_width=1, border_color=BORDER_COLOR)

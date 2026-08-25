@@ -361,7 +361,7 @@ class AppIntegrationService:
     def _parse_owner_repo(self, remote_url: str) -> str:
         if not remote_url:
             return ""
-        m = re.search(r"github\.com[:/]([a-zA-Z0-9_\-]+/[a-zA-Z0-9_\.\-]+)", remote_url)
+        m = re.search(r"github(?:-[a-zA-Z0-9_\-]+)?\.com?[:/]([a-zA-Z0-9_\-]+/[a-zA-Z0-9_\.\-]+)", remote_url)
         if m:
             clean = m.group(1)
             if clean.endswith(".git"):
@@ -369,8 +369,13 @@ class AppIntegrationService:
             return clean
         return ""
 
-    def convert_repo_remote(self, repo_path: str | Path, to_protocol: str = "ssh") -> Tuple[bool, str]:
-        """Convert a repository remote URL between HTTPS and SSH."""
+    def convert_repo_remote(
+        self,
+        repo_path: str | Path,
+        to_protocol: str = "ssh",
+        account_slug: Optional[str] = None,
+    ) -> Tuple[bool, str]:
+        """Convert a repository remote URL between HTTPS and SSH with dedicated Host Aliases."""
         p = Path(repo_path)
         if not p.exists() or not (p / ".git").exists():
             return False, f"Directory is not a valid git repository: {repo_path}"
@@ -384,7 +389,8 @@ class AppIntegrationService:
             return False, f"Could not parse GitHub repository owner and name from: {current_url}"
 
         if to_protocol.lower() == "ssh":
-            new_url = f"git@github.com:{owner_repo}.git"
+            host_alias = f"github-{account_slug.lower()}" if account_slug else "github.com"
+            new_url = f"git@{host_alias}:{owner_repo}.git"
         else:
             new_url = f"https://github.com/{owner_repo}.git"
 

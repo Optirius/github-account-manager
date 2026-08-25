@@ -6,6 +6,7 @@ import customtkinter as ctk
 
 from github_account_manager.models import SSHKeyInfo
 from github_account_manager.services.manager import AccountManager
+from github_account_manager.ui.async_runner import run_async
 from github_account_manager.ui.components.dialogs import (
     BaseDialog,
     ConfirmDeleteDialog,
@@ -14,6 +15,7 @@ from github_account_manager.ui.components.dialogs import (
     SSHActiveDeleteBlockDialog,
     SSHTestGuideDialog,
 )
+from github_account_manager.ui.components.info_banner import InfoBanner
 from github_account_manager.ui.components.status_badge import StatusBadge
 from github_account_manager.ui.theme import (
     ACCENT_BLUE,
@@ -110,6 +112,16 @@ class SSHView(ctk.CTkFrame):
     def refresh(self):
         for widget in self.keys_scroll.winfo_children():
             widget.destroy()
+
+        # Contextual explanation banner
+        InfoBanner(
+            self.keys_scroll,
+            title="How SSH Key Authentication Works",
+            what_it_does="Generates and stores high-security ED25519 keys in ~/.ssh/ and verifies GitHub connection status.",
+            why_needed="GitHub requires tokenless SSH authentication. Dedicated keys eliminate cross-account permission collisions in external IDEs.",
+            how_it_works="Maps ~/.ssh/config aliases through port 443 (ssh.github.com) to bypass firewall blocks and locks identities strictly to each account.",
+            icon="🔑",
+        ).pack(fill="x", pady=(0, 15))
 
         keys = self.manager.ssh_service.list_keys()
 
@@ -227,8 +239,8 @@ class SSHView(ctk.CTkFrame):
             text_color=BTN_SECONDARY_TEXT,
             border_width=1,
             border_color=BORDER_COLOR,
-            command=lambda p=key_info.private_key_path, n=key_info.name: self._test_ssh_key(p, n),
         )
+        test_btn.configure(command=lambda p=key_info.private_key_path, n=key_info.name, b=test_btn: self._test_ssh_key(p, n, b))
         test_btn.pack(side="left", padx=(0, 8))
 
         # Direct Upload to GitHub button
@@ -259,8 +271,8 @@ class SSHView(ctk.CTkFrame):
             border_color=BORDER_COLOR,
             text_color=BTN_SECONDARY_TEXT,
             hover_color=ACCENT_RED,
-            command=lambda k=key_info: self._handle_delete_ssh_key(k),
         )
+        del_btn.configure(command=lambda k=key_info, b=del_btn: self._handle_delete_ssh_key(k, b))
         del_btn.pack(side="right")
 
     def _copy_to_clipboard(self, text: str):
@@ -269,44 +281,49 @@ class SSHView(ctk.CTkFrame):
         self.update()
         self.on_notify("Copied", "Public SSH key copied to clipboard!")
 
-    def _test_ssh_key(self, priv_path: str, name: str):
+    def _test_ssh_key(self, priv_path: str, name: str, btn: Optional[ctk.CTkButton] = None):
         pub_content = self.manager.ssh_service.read_public_key(priv_path) or ""
+        self.on_notify("Testing SSH", f"Testing SSH connection for '{name}'...")
 
-        def run():
-            success, output, user = self.manager.ssh_service.test_connection(priv_path)
-            self.after(
-                0,
-                lambda: SSHTestGuideDialog(
-                    self.winfo_toplevel(),
-                    key_name=name,
-                    public_key_content=pub_content,
-                    is_connected=success,
-                    output=output,
-                    username=user,
-                ),
+        def task():
+            return self.manager.ssh_service.test_connection(priv_path)
+
+        def on_done(result):
+            success, output, user = result
+            SSHTestGuideDialog(
+                self.winfo_toplevel(),
+                key_name=name,
+                public_key_content=pub_content,
+                is_connected=success,
+                output=output,
+                username=user,
             )
 
-        threading.Thread(target=run, daemon=True).start()
+        run_async(
+            self,
+            task_fn=task,
+            on_success=on_done,
+            loading_btn=btn,
+            loading_text="⏳ Testing...",
+            error_title="SSH Test Error",
+        )
 
-    def _handle_delete_ssh_key(self, key_info: SSHKeyInfo):
-        # Test connection live to see if active on GitHub
+    def _handle_delete_ssh_key(self, key_info: SSHKeyInfo, btn: Optional[ctk.CTkButton] = None):
         self.on_notify("Checking Status", f"Testing if '{key_info.name}' is active on GitHub...")
 
-        def run():
-            is_connected, output, user = self.manager.ssh_service.test_connection(key_info.private_key_path)
+        def task():
+            return self.manager.ssh_service.test_connection(key_info.private_key_path)
+
+        def on_done(result):
+            is_connected, output, user = result
 
             if is_connected:
-                # Active on GitHub -> block deletion and provide guidance with link
-                self.after(
-                    0,
-                    lambda: SSHActiveDeleteBlockDialog(
-                        self.winfo_toplevel(),
-                        key_name=key_info.name,
-                        username=user,
-                    ),
+                SSHActiveDeleteBlockDialog(
+                    self.winfo_toplevel(),
+                    key_name=key_info.name,
+                    username=user,
                 )
             else:
-                # Not active on GitHub -> allow safe deletion
                 def confirm_delete():
                     deleted = self.manager.delete_ssh_key(key_info.private_key_path)
                     if deleted:
@@ -315,19 +332,23 @@ class SSHView(ctk.CTkFrame):
                     else:
                         self.on_notify("Error", f"Could not delete '{key_info.name}'.", is_error=True)
 
-                self.after(
-                    0,
-                    lambda: ConfirmDeleteDialog(
-                        self.winfo_toplevel(),
-                        title="Delete Unconnected SSH Key",
-                        heading=f"Delete '{key_info.name}'?",
-                        message=f"SSH test confirms this key is NOT connected to GitHub.\n\n"
-                                f"Are you sure you want to permanently delete '{key_info.name}' and its public key from your ~/.ssh/ directory?",
-                        on_confirm=confirm_delete,
-                    ),
+                ConfirmDeleteDialog(
+                    self.winfo_toplevel(),
+                    title="Delete Unconnected SSH Key",
+                    heading=f"Delete '{key_info.name}'?",
+                    message=f"SSH test confirms this key is NOT connected to GitHub.\n\n"
+                            f"Are you sure you want to permanently delete '{key_info.name}' and its public key from your ~/.ssh/ directory?",
+                    on_confirm=confirm_delete,
                 )
 
-        threading.Thread(target=run, daemon=True).start()
+        run_async(
+            self,
+            task_fn=task,
+            on_success=on_done,
+            loading_btn=btn,
+            loading_text="⏳",
+            error_title="SSH Key Status Check Error",
+        )
 
     def _open_generate_dialog(self):
         def handle_gen(data: dict) -> Tuple[bool, str]:

@@ -6,10 +6,12 @@ from typing import Callable, Optional
 import customtkinter as ctk
 
 from github_account_manager.services.manager import AccountManager
+from github_account_manager.ui.async_runner import run_async
 from github_account_manager.ui.components.dialogs import (
     ResultModalDialog,
     SSHTestGuideDialog,
 )
+from github_account_manager.ui.components.info_banner import InfoBanner
 from github_account_manager.ui.components.status_badge import StatusBadge
 from github_account_manager.ui.theme import (
     ACCENT_BLUE,
@@ -65,6 +67,16 @@ class InspectorView(ctk.CTkFrame):
         content = ctk.CTkFrame(self, fg_color="transparent")
         content.pack(fill="both", expand=True, padx=25, pady=(10, 20))
 
+        # Contextual explanation banner
+        InfoBanner(
+            content,
+            title="How the Directory Inspector Works",
+            what_it_does="Inspects any folder or repository to simulate and display the exact Git username, email, and SSH command Git will resolve.",
+            why_needed="Allows you to verify with 100% certainty that your folder rules and SSH keys are active before making commits or pushes.",
+            how_it_works="Executes non-destructive Git configuration queries and verifies live SSH handshake against GitHub.",
+            icon="🔍",
+        ).pack(fill="x", pady=(0, 15))
+
         # Folder selection card
         picker_card = ctk.CTkFrame(content, fg_color=BG_CARD, corner_radius=8, border_width=1, border_color=BORDER_COLOR)
         picker_card.pack(fill="x", pady=(0, 15))
@@ -95,7 +107,7 @@ class InspectorView(ctk.CTkFrame):
         )
         browse_btn.pack(side="left", padx=(0, 8))
 
-        inspect_btn = ctk.CTkButton(
+        self.inspect_btn = ctk.CTkButton(
             row,
             text="🔍 Inspect Now",
             width=130,
@@ -106,7 +118,7 @@ class InspectorView(ctk.CTkFrame):
             text_color="#ffffff",
             command=self.run_inspection,
         )
-        inspect_btn.pack(side="left")
+        self.inspect_btn.pack(side="left")
 
         # Results Card
         self.result_card = ctk.CTkFrame(content, fg_color=BG_CARD, corner_radius=8, border_width=1, border_color=BORDER_COLOR)
@@ -139,103 +151,125 @@ class InspectorView(ctk.CTkFrame):
         if not target:
             return
 
-        for w in self.res_scroll.winfo_children():
-            w.destroy()
+        def task():
+            info = self.manager.git_service.inspect_directory(target)
+            matched_account = self.manager.get_account_for_folder(target)
+            return info, matched_account
 
-        info = self.manager.git_service.inspect_directory(target)
-        matched_account = self.manager.get_account_for_folder(target)
+        def on_done(result):
+            info, matched_account = result
+            for w in self.res_scroll.winfo_children():
+                w.destroy()
 
-        # Header of result
-        res_header = ctk.CTkFrame(self.res_scroll, fg_color="transparent")
-        res_header.pack(fill="x", pady=(0, 10))
+            # Header of result
+            res_header = ctk.CTkFrame(self.res_scroll, fg_color="transparent")
+            res_header.pack(fill="x", pady=(0, 10))
 
-        ctk.CTkLabel(
-            res_header,
-            text=f"Inspection Results for: {target}",
-            font=FONT_SUBHEADING,
-            text_color=TEXT_PRIMARY,
-        ).pack(side="left")
-
-        if info.get("is_git_repo"):
-            StatusBadge(res_header, "Git Repository", "info").pack(side="right")
-        elif info.get("exists"):
-            StatusBadge(res_header, "Standard Directory", "warning").pack(side="right")
-        else:
-            StatusBadge(res_header, "Directory Not Found", "danger").pack(side="right")
-
-        # Matched App Account
-        acc_box = ctk.CTkFrame(self.res_scroll, fg_color=BG_INSET, corner_radius=6, border_width=1, border_color=BORDER_COLOR)
-        acc_box.pack(fill="x", pady=8)
-
-        if matched_account:
             ctk.CTkLabel(
-                acc_box,
-                text=f"✓ Mapped Profile: {matched_account.name}",
-                font=FONT_BODY_BOLD,
-                text_color=ACCENT_GREEN,
-            ).pack(anchor="w", padx=14, pady=(10, 2))
-            ctk.CTkLabel(
-                acc_box,
-                text=f"Config file: ~/.gitconfig-{matched_account.slug}",
-                font=FONT_MONO_SMALL,
-                text_color=TEXT_SECONDARY,
-            ).pack(anchor="w", padx=14, pady=(0, 10))
-        else:
-            ctk.CTkLabel(
-                acc_box,
-                text="ℹ️ No direct folder mapping found (Global default Git config applies)",
-                font=FONT_BODY,
-                text_color=TEXT_SECONDARY,
-            ).pack(anchor="w", padx=14, pady=10)
+                res_header,
+                text=f"Inspection Results for: {target}",
+                font=FONT_SUBHEADING,
+                text_color=TEXT_PRIMARY,
+            ).pack(side="left")
 
-        # Table of resolved values
-        table = ctk.CTkFrame(self.res_scroll, fg_color="transparent")
-        table.pack(fill="x", pady=8)
+            if info.get("is_git_repo"):
+                StatusBadge(res_header, "Git Repository", "info").pack(side="right")
+            elif info.get("exists"):
+                StatusBadge(res_header, "Standard Directory", "warning").pack(side="right")
+            else:
+                StatusBadge(res_header, "Directory Not Found", "danger").pack(side="right")
 
-        def add_row(label: str, val: str, is_mono: bool = False):
-            r = ctk.CTkFrame(table, fg_color="transparent")
-            r.pack(fill="x", pady=4)
-            ctk.CTkLabel(r, text=label, width=180, font=FONT_BODY_BOLD, text_color=TEXT_SECONDARY, anchor="w").pack(side="left")
-            font_to_use = FONT_MONO if is_mono else FONT_BODY
-            display_val = val or "(empty / not configured)"
-            color = TEXT_PRIMARY if val else TEXT_MUTED
-            ctk.CTkLabel(r, text=display_val, font=font_to_use, text_color=color, anchor="w").pack(side="left", fill="x", expand=True)
+            # Matched App Account
+            acc_box = ctk.CTkFrame(self.res_scroll, fg_color=BG_INSET, corner_radius=6, border_width=1, border_color=BORDER_COLOR)
+            acc_box.pack(fill="x", pady=8)
 
-        add_row("Resolved user.name:", info.get("user_name", ""))
-        add_row("Resolved user.email:", info.get("user_email", ""))
-        add_row("Resolved core.sshCommand:", info.get("ssh_command", ""), is_mono=True)
+            if matched_account:
+                ctk.CTkLabel(
+                    acc_box,
+                    text=f"✓ Mapped Profile: {matched_account.name}",
+                    font=FONT_BODY_BOLD,
+                    text_color=ACCENT_GREEN,
+                ).pack(anchor="w", padx=14, pady=(10, 2))
+                ctk.CTkLabel(
+                    acc_box,
+                    text=f"Config file: ~/.gitconfig-{matched_account.slug}",
+                    font=FONT_MONO_SMALL,
+                    text_color=TEXT_SECONDARY,
+                ).pack(anchor="w", padx=14, pady=(0, 10))
+            else:
+                ctk.CTkLabel(
+                    acc_box,
+                    text="ℹ️ No direct folder mapping found (Global default Git config applies)",
+                    font=FONT_BODY,
+                    text_color=TEXT_SECONDARY,
+                ).pack(anchor="w", padx=14, pady=10)
 
-        # Test SSH button
-        if matched_account and matched_account.ssh_key_path:
-            btn_box = ctk.CTkFrame(self.res_scroll, fg_color="transparent")
-            btn_box.pack(fill="x", pady=15)
+            # Table of resolved values
+            table = ctk.CTkFrame(self.res_scroll, fg_color="transparent")
+            table.pack(fill="x", pady=8)
 
-            ctk.CTkButton(
-                btn_box,
-                text=f"⚡ Test SSH Connection using {matched_account.name} Key",
-                fg_color=ACCENT_BLUE,
-                hover_color=ACCENT_BLUE_HOVER,
-                text_color="#ffffff",
-                height=36,
-                font=FONT_BODY_BOLD,
-                command=lambda: self._test_account_ssh(matched_account),
-            ).pack(anchor="w")
+            def add_row(label: str, val: str, is_mono: bool = False):
+                r = ctk.CTkFrame(table, fg_color="transparent")
+                r.pack(fill="x", pady=4)
+                ctk.CTkLabel(r, text=label, width=180, font=FONT_BODY_BOLD, text_color=TEXT_SECONDARY, anchor="w").pack(side="left")
+                font_to_use = FONT_MONO if is_mono else FONT_BODY
+                display_val = val or "(empty / not configured)"
+                color = TEXT_PRIMARY if val else TEXT_MUTED
+                ctk.CTkLabel(r, text=display_val, font=font_to_use, text_color=color, anchor="w").pack(side="left", fill="x", expand=True)
 
-    def _test_account_ssh(self, account):
+            add_row("Resolved user.name:", info.get("user_name", ""))
+            add_row("Resolved user.email:", info.get("user_email", ""))
+            add_row("Resolved core.sshCommand:", info.get("ssh_command", ""), is_mono=True)
+
+            # Test SSH button
+            if matched_account and matched_account.ssh_key_path:
+                btn_box = ctk.CTkFrame(self.res_scroll, fg_color="transparent")
+                btn_box.pack(fill="x", pady=15)
+
+                test_btn = ctk.CTkButton(
+                    btn_box,
+                    text=f"⚡ Test SSH Connection using {matched_account.name} Key",
+                    fg_color=ACCENT_BLUE,
+                    hover_color=ACCENT_BLUE_HOVER,
+                    text_color="#ffffff",
+                    height=36,
+                    font=FONT_BODY_BOLD,
+                )
+                test_btn.configure(command=lambda a=matched_account, b=test_btn: self._test_account_ssh(a, b))
+                test_btn.pack(anchor="w")
+
+        run_async(
+            self,
+            task_fn=task,
+            on_success=on_done,
+            loading_btn=self.inspect_btn,
+            loading_text="⏳ Inspecting...",
+            error_title="Inspection Error",
+        )
+
+    def _test_account_ssh(self, account, btn: Optional[ctk.CTkButton] = None):
         pub_content = self.manager.ssh_service.read_public_key(account.ssh_key_path) or ""
+        self.on_notify("Testing SSH", f"Connecting to GitHub using '{account.name}' key...")
 
-        def run():
-            success, output, user = self.manager.test_ssh_for_account(account.id)
-            self.after(
-                0,
-                lambda: SSHTestGuideDialog(
-                    self.winfo_toplevel(),
-                    key_name=account.name,
-                    public_key_content=pub_content,
-                    is_connected=success,
-                    output=output,
-                    username=user,
-                ),
+        def task():
+            return self.manager.test_ssh_for_account(account.id)
+
+        def on_done(result):
+            success, output, user = result
+            SSHTestGuideDialog(
+                self.winfo_toplevel(),
+                key_name=account.name,
+                public_key_content=pub_content,
+                is_connected=success,
+                output=output,
+                username=user,
             )
 
-        threading.Thread(target=run, daemon=True).start()
+        run_async(
+            self,
+            task_fn=task,
+            on_success=on_done,
+            loading_btn=btn,
+            loading_text="⏳ Testing...",
+            error_title="SSH Test Error",
+        )

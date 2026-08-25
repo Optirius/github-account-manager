@@ -5,6 +5,7 @@ import customtkinter as ctk
 
 from github_account_manager.models import Account
 from github_account_manager.services.manager import AccountManager
+from github_account_manager.ui.async_runner import run_async
 from github_account_manager.ui.components.account_card import AccountCard
 from github_account_manager.ui.components.dialogs import (
     AddEditAccountDialog,
@@ -12,6 +13,7 @@ from github_account_manager.ui.components.dialogs import (
     SSHTestGuideDialog,
     TokenLoginDialog,
 )
+from github_account_manager.ui.components.info_banner import InfoBanner
 from github_account_manager.ui.theme import (
     ACCENT_GREEN,
     ACCENT_GREEN_HOVER,
@@ -77,6 +79,16 @@ class AccountsView(ctk.CTkFrame):
         # Clear existing card widgets
         for widget in self.cards_scroll.winfo_children():
             widget.destroy()
+
+        # Contextual explanation banner
+        InfoBanner(
+            self.cards_scroll,
+            title="How Account Profiles Work",
+            what_it_does="Stores independent Git Author Names, Commit Emails, and SSH Keys for each GitHub profile (e.g. Personal vs Work).",
+            why_needed="Prevents your personal email from accidentally appearing in workplace commits and eliminates account confusion across projects.",
+            how_it_works="Creates isolated ~/.gitconfig-<profile> files and automatically links them to your project directories via Git includes.",
+            icon="👤",
+        ).pack(fill="x", pady=(0, 15))
 
         accounts = self.manager.settings.accounts
         if not accounts:
@@ -163,12 +175,20 @@ class AccountsView(ctk.CTkFrame):
         self.refresh()
 
     def _open_login_dialog(self, account: Account):
-        def handle_token_submit(token: str):
-            def run():
-                res = self.manager.login_with_token(account.id, token)
-                self.after(0, lambda: self._on_login_finished(dialog, account, res))
+        dialog = None
 
-            threading.Thread(target=run, daemon=True).start()
+        def handle_token_submit(token: str):
+            def task():
+                return self.manager.login_with_token(account.id, token)
+
+            run_async(
+                self,
+                task_fn=task,
+                on_success=lambda res: self._on_login_finished(dialog, account, res),
+                loading_btn=dialog.submit_btn if dialog else None,
+                loading_text="⏳ Verifying...",
+                error_title="GitHub Login Error",
+            )
 
         dialog = TokenLoginDialog(
             self.winfo_toplevel(),
@@ -183,7 +203,7 @@ class AccountsView(ctk.CTkFrame):
             self.refresh()
         else:
             dialog.status_lbl.configure(text=f"Error: {res.get('error')}", text_color="#cf222e")
-            dialog.submit_btn.configure(state="normal")
+            dialog.submit_btn.configure(state="normal", text="Verify & Login")
 
     def _handle_logout(self, account: Account):
         self.manager.logout_account(account.id)
@@ -202,42 +222,54 @@ class AccountsView(ctk.CTkFrame):
             return
 
         pub_content = self.manager.ssh_service.read_public_key(account.ssh_key_path) or ""
+        self.on_notify("Testing SSH", f"Connecting to GitHub using '{account.name}' key...")
 
-        def run():
-            success, output, user = self.manager.test_ssh_for_account(account.id)
-            self.after(
-                0,
-                lambda: SSHTestGuideDialog(
-                    self.winfo_toplevel(),
-                    key_name=account.name,
-                    public_key_content=pub_content,
-                    is_connected=success,
-                    output=output,
-                    username=user,
-                ),
+        def task():
+            return self.manager.test_ssh_for_account(account.id)
+
+        def on_done(result):
+            success, output, user = result
+            SSHTestGuideDialog(
+                self.winfo_toplevel(),
+                key_name=account.name,
+                public_key_content=pub_content,
+                is_connected=success,
+                output=output,
+                username=user,
             )
 
-        threading.Thread(target=run, daemon=True).start()
+        run_async(
+            self,
+            task_fn=task,
+            on_success=on_done,
+            error_title="SSH Connection Error",
+        )
 
     def _handle_upload_ssh(self, account: Account):
-        def run():
-            res = self.manager.upload_ssh_key_to_github(
+        self.on_notify("Uploading Key", f"Uploading public key to GitHub for '{account.name}'...")
+
+        def task():
+            return self.manager.upload_ssh_key_to_github(
                 account_id=account.id,
                 ssh_key_path=account.ssh_key_path or "",
                 title=f"MultiAccountManager - {account.name}",
             )
+
+        def on_done(res):
             is_success = res.get("success", False)
             heading = "Key Uploaded to GitHub!" if is_success else "Upload Failed"
             msg = f"Key ID: {res.get('key_id')}\nTitle: {res.get('title')}" if is_success else str(res.get("error"))
-            self.after(
-                0,
-                lambda: ResultModalDialog(
-                    self.winfo_toplevel(),
-                    title=f"GitHub SSH Upload - {account.name}",
-                    heading=heading,
-                    content=msg,
-                    is_success=is_success,
-                ),
+            ResultModalDialog(
+                self.winfo_toplevel(),
+                title=f"GitHub SSH Upload - {account.name}",
+                heading=heading,
+                content=msg,
+                is_success=is_success,
             )
 
-        threading.Thread(target=run, daemon=True).start()
+        run_async(
+            self,
+            task_fn=task,
+            on_success=on_done,
+            error_title="SSH Upload Error",
+        )

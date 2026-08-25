@@ -340,7 +340,7 @@ class AddEditAccountDialog(BaseDialog):
             return
 
         self.status_lbl.configure(text="Searching GitHub for account info...", text_color=ACCENT_BLUE)
-        self.search_btn.configure(state="disabled")
+        self.search_btn.configure(state="disabled", text="⏳ Searching...")
 
         def run():
             if self.on_lookup:
@@ -350,7 +350,7 @@ class AddEditAccountDialog(BaseDialog):
         threading.Thread(target=run, daemon=True).start()
 
     def _apply_lookup_result(self, query: str, res: dict):
-        self.search_btn.configure(state="normal")
+        self.search_btn.configure(state="normal", text="🔍 Search & Fill")
         if res.get("success"):
             if res.get("username"):
                 self.username_entry.delete(0, "end")
@@ -545,7 +545,7 @@ class NewSSHKeyDialog(BaseDialog):
         }
 
         self.status_lbl.configure(text="Generating key pair in background...", text_color=ACCENT_BLUE)
-        self.gen_btn.configure(state="disabled")
+        self.gen_btn.configure(state="disabled", text="⏳ Generating...")
 
         def run():
             if self.on_generate:
@@ -555,7 +555,7 @@ class NewSSHKeyDialog(BaseDialog):
         threading.Thread(target=run, daemon=True).start()
 
     def _on_generate_done(self, success: bool, msg: str):
-        self.gen_btn.configure(state="normal")
+        self.gen_btn.configure(state="normal", text="Generate Key")
         if success:
             self.destroy()
         else:
@@ -1045,3 +1045,88 @@ class ConfirmDeleteDialog(BaseDialog):
     def _handle_delete(self):
         self.on_confirm()
         self.destroy()
+
+
+class ErrorModalDialog(BaseDialog):
+    """Rich error modal presenting clean error explanation with copyable traceback."""
+    def __init__(self, parent, title: str, message: str, details: Optional[str] = None):
+        super().__init__(parent, title, 620, 480)
+        self.details = details or message
+
+        container = ctk.CTkFrame(self, fg_color="transparent")
+        container.pack(fill="both", expand=True, padx=25, pady=22)
+
+        # Header
+        ctk.CTkLabel(
+            container,
+            text=f"❌  {title}",
+            font=FONT_HEADING,
+            text_color=ACCENT_RED,
+        ).pack(anchor="w", pady=(0, 6))
+
+        # Main message
+        ctk.CTkLabel(
+            container,
+            text=message,
+            font=FONT_BODY,
+            text_color=TEXT_PRIMARY,
+            justify="left",
+            wraplength=560,
+        ).pack(anchor="w", pady=(0, 12))
+
+        # Details box
+        ctk.CTkLabel(
+            container,
+            text="Technical Details / Stack Trace:",
+            font=FONT_BODY_BOLD,
+            text_color=TEXT_SECONDARY,
+        ).pack(anchor="w", pady=(0, 4))
+
+        text_box = ctk.CTkTextbox(
+            container,
+            font=FONT_MONO_SMALL,
+            fg_color=BG_CARD,
+            border_width=1,
+            border_color=BORDER_COLOR,
+            text_color=TEXT_PRIMARY,
+            wrap="word",
+        )
+        text_box.pack(fill="both", expand=True, pady=(0, 14))
+        text_box.insert("1.0", self.details)
+        text_box.configure(state="disabled")
+
+        # Bottom buttons
+        btn_row = ctk.CTkFrame(container, fg_color="transparent")
+        btn_row.pack(fill="x", side="bottom")
+
+        self.copy_btn = ctk.CTkButton(
+            btn_row,
+            text="📋 Copy Error Details",
+            font=FONT_SMALL,
+            fg_color=BTN_SECONDARY_BG,
+            hover_color=BTN_SECONDARY_HOVER,
+            text_color=BTN_SECONDARY_TEXT,
+            border_width=1,
+            border_color=BORDER_COLOR,
+            command=self._copy_details,
+            height=36,
+        )
+        self.copy_btn.pack(side="left")
+
+        ctk.CTkButton(
+            btn_row,
+            text="Close",
+            fg_color=ACCENT_RED,
+            hover_color=ACCENT_RED_HOVER,
+            text_color="#ffffff",
+            command=self.destroy,
+            width=110,
+            height=36,
+            font=FONT_BODY_BOLD,
+        ).pack(side="right")
+
+    def _copy_details(self):
+        self.clipboard_clear()
+        self.clipboard_append(self.details)
+        self.update()
+        self.copy_btn.configure(text="✓ Copied!", text_color=ACCENT_GREEN)

@@ -1,99 +1,156 @@
 # 🐙 GitHub Multi-Account Manager
 
-A secure, modern Desktop GUI application built with **Python**, **uv**, and **CustomTkinter** for managing multiple GitHub accounts across different directories (e.g., \/personal\ and \/professional\ workflows).
+A secure, modern desktop GUI application built with **Python 3.12+**, **uv**, and **CustomTkinter** for seamless management of multiple GitHub accounts across different directories (e.g., Personal, Work, Freelance, or Client projects) on Windows.
+
+Eliminates cross-account permission collisions, IDE account hijacking (VS Code, Cursor), and corporate firewall blocks once and for all.
 
 ---
 
-## ✨ Features
+## 🌟 Key Highlights
 
-- **📂 Automatic Directory-to-Account Mapping (includeIf)**:
-  - Automatically configures Git conditional includes (\[includeIf "gitdir/i:<folder>/"]\).
-  - Seamlessly switch between Personal, Work, or Freelance accounts based on your working folder (e.g. \D:/Personal/\ vs \D:/Professional/\).
-  - Standard \git clone git@github.com:...\, commit, push, and pull commands work with the correct author and SSH key without manual switching or URL rewriting.
+* **📂 Automatic Directory Routing (includeIf)**: Repositories in D:/Personal automatically commit as your personal account; repositories in D:/Professional automatically commit as your work account.
+* **🛡️ External IDE & App Isolation**: Prevents VS Code and Cursor from injecting their logged-in GitHub account into your Git repositories with 1-click isolation (github.gitAuthentication: false).
+* **🔑 SSH Port 443 & Firewall Bypass**: Automatically routes SSH connections through ssh.github.com:443 with IdentitiesOnly yes, bypassing corporate firewall port 22 blocks and strict identity collisions.
+* **🔄 HTTPS ➔ SSH Protocol Converter**: 1-click scanner and converter that maps repositories to their dedicated profile SSH aliases (e.g. git@github-personal:owner/repo.git).
+* **🔐 Windows Credential Vault Manager**: Inspects and clears cached global tokens (git:https://github.com) from Windows Credential Manager.
+* **⚡ Non-Blocking Async UI**: Powered by a dedicated background task runner with dynamic button loaders (⏳ Testing..., ⏳ Converting...) and rich error modal windows.
+* **💡 In-App Contextual Guidance**: Every section features built-in explainers detailing **What it does**, **Why it's needed**, and **How it works**.
 
-- **👤 Multi-Profile & Account Management**:
-  - Store multiple profiles with individual Git author names, commit emails, and GitHub handles.
-  - Automatically generates and synchronizes \~/.gitconfig-<profile>\ configuration files.
+---
 
-- **🔐 Secure Token Authentication (GitHub PAT)**:
-  - Log in with GitHub Personal Access Tokens (PAT).
-  - Tokens are encrypted and saved securely using the **Windows Credential Manager / OS Keyring** (\keyring\).
-  - Auto-fetches profile details (Username, Avatar, Primary Verified Email, and Token Scopes).
+## ✨ Feature Breakdown
 
-- **🔑 Complete SSH Key Manager**:
-  - Discover and view existing SSH keys in \~/.ssh/\.
-  - Generate new high-security **ED25519** (or RSA 4096-bit) SSH key pairs with one click.
-  - Copy public keys to your clipboard instantly.
-  - **1-Click Upload to GitHub**: Direct API upload of generated SSH keys to your GitHub account (no need to open a browser).
-  - **Live SSH Connection Testing**: Test authentication with GitHub (\ssh -T\) directly inside the UI.
+### 1. 👤 Account Profiles & Git Identities
+- Store multiple independent profiles with custom **Git Author Names**, **Commit Emails**, and **GitHub Handles**.
+- Search and auto-fill profile info from GitHub using an Email, Username (@octocat), or Personal Access Token (PAT).
+- Generates isolated ~/.gitconfig-<profile> configuration files with atomic file replacement.
 
-- **🔍 Live Git Inspector & Diagnostics**:
-  - Browse or paste any folder path to verify which Git author identity and SSH key will be used.
-  - Live test SSH connectivity using the folder's assigned credentials.
+### 2. 📁 Workspace Directory Mappings
+- Map entire folders (e.g. D:/Personal/Projects or D:/Professional/Projects) to specific profiles.
+- Native Git [includeIf "gitdir/i:<path>"] integration ensures Git CLI, IDEs, and GUI tools apply the right identity without running manual git config commands.
 
-- **⚙️ Safety & Backups**:
-  - Automated timestamped backups of \~/.gitconfig\ before making changes.
-  - Built-in backup restoration and live config preview.
-  - Modern Dark / Light theme support.
+### 3. 🔑 Complete SSH Key Lifecycle Manager
+- **Discovery**: Automatically discovers all RSA and ED25519 keys in ~/.ssh/.
+- **Generation**: Generate new high-security **ED25519** (or RSA 4096-bit) key pairs with optional passphrases in one click.
+- **1-Click GitHub Upload**: Directly upload public keys to your GitHub account via REST API without opening a browser.
+- **Live Connection Testing**: Test live SSH authentication against GitHub (ssh -T) with interactive in-app setup guides.
+- **Safe Deletion Guard**: Tests keys before deletion—if a key is still active on GitHub, deletion is blocked with a direct revocation link.
+
+### 4. 🧩 External Apps & IDE Isolation (Apps & Integrations)
+- **Universal App Scanner**: Discovers installed code editors (VS Code, Cursor AI, Windsurf, VSCodium) and Git GUI clients (GitHub Desktop, Visual Studio).
+- **1-Click Folder Isolation**: Configures code editors to respect local folder Git configs and stop hijacking commits with their active editor login.
+- **Windows Credential Manager Cleanup**: Detects and deletes conflicting global Git credentials cached in Windows Vault.
+- **Repository Remote Converter**: Converts repositories between HTTPS and dedicated SSH aliases with 1-click bulk support.
+
+### 5. 🔍 Live Git & Directory Inspector
+- Inspect any folder or repository path to simulate and view the exact Git identity (user.name, user.email) and core.sshCommand Git will use.
+- Live-test SSH connectivity for mapped directory profiles.
+
+### 6. ⚙️ Automatic Backups & Safety
+- Automated timestamped backups of ~/.gitconfig stored in ~/.github_account_manager/backups/.
+- 1-click backup restoration and live ~/.gitconfig preview.
+- Dark, Light, and System theme support with full high-contrast readability.
 
 ---
 
 ## 🚀 Getting Started
 
 ### Prerequisites
-- Python 3.12+
-- [uv](https://docs.astral.sh/uv/) package manager
-- Git for Windows / OpenSSH
+- **Windows 10 / 11**
+- **Python 3.12+**
+- [**uv**](https://docs.astral.sh/uv/) (recommended) or pip
+- **Git for Windows** & **OpenSSH**
 
-### Installation & Run
+### Quickstart
 
-1. **Clone or navigate to the project directory:**
-   `ash
-   cd D:\Personal\Projects\github-multi-account-manager
+1. **Clone the repository:**
+   `powershell
+   git clone https://github.com/Optirius/github-multi-account-manager.git
+   cd github-multi-account-manager
    `
 
-2. **Run the Application with \uv\:**
-   `ash
+2. **Run with uv:**
+   `powershell
    uv run github-account-manager
    `
-   *Alternatively, run with Python:*
-   `ash
-   uv run python main.py
+
+   *Or run directly with Python:*
+   `powershell
+   python -m venv .venv
+   .venv\Scripts\activate
+   pip install -e .
+   python -m github_account_manager
    `
 
 3. **Run Unit Tests:**
-   `ash
+   `powershell
    uv run pytest
    `
 
 ---
 
-## 📁 Project Architecture
+## 🏗️ Architecture & Project Structure
 
-\\\
+`
 github-multi-account-manager/
-├── pyproject.toml               # uv project definitions and dependencies
+├── pyproject.toml               # uv project configuration and dependencies
 ├── README.md                    # Project documentation
-├── main.py                      # Development launcher
+├── main.py                      # Development entry point
 ├── src/
 │   └── github_account_manager/
-│       ├── config.py            # App constants, paths, and settings
-│       ├── models.py            # Pydantic data schemas (Account, FolderMapping, SSHKeyInfo)
+│       ├── config.py            # App paths, directories, and constants
+│       ├── models.py            # Pydantic schemas (Account, FolderMapping, SSHKeyInfo)
 │       ├── services/
-│       │   ├── git_service.py   # Git config parser, writer, includeIf manager & backups
-│       │   ├── ssh_service.py   # SSH key generator, discovery, and live connection tester
-│       │   ├── github_service.py# GitHub REST API client (PAT auth & key upload)
-│       │   ├── keyring_service.py # OS Keyring / Windows Credential Manager integration
-│       │   └── manager.py       # Core orchestrator coordinating state & synchronization
+│       │   ├── git_service.py   # Git config includes, profiles, ~/.ssh/config & backups
+│       │   ├── ssh_service.py   # SSH key generation, discovery & live testing
+│       │   ├── github_service.py# GitHub REST API client (PAT auth & key uploads)
+│       │   ├── keyring_service.py # Windows Credential Vault / OS Keyring integration
+│       │   ├── app_integration_service.py # IDE isolation, cmdkey & repo scanner
+│       │   └── manager.py       # Core orchestrator coordinating state & sync
 │       └── ui/
-│           ├── app.py           # Main CustomTkinter desktop window
-│           ├── theme.py         # Color palette, styling, and typography
-│           ├── components/      # UI components (Cards, Badges, Modals, Pickers)
-│           └── views/           # Accounts, Folders, SSH, Inspector, and Settings views
-└── tests/                       # Complete pytest test suite
-\\\
+│           ├── app.py           # Main CustomTkinter application window & navigation
+│           ├── async_runner.py  # Non-blocking async background executor with loaders
+│           ├── theme.py         # Color palettes, typography & high-contrast themes
+│           ├── components/      # Cards, Badges, Modals, InfoBanners, Dialogs
+│           │   ├── account_card.py
+│           │   ├── folder_row.py
+│           │   ├── info_banner.py
+│           │   ├── status_badge.py
+│           │   └── dialogs.py   # Login, SSH guides, Deletion guard & Error modals
+│           └── views/           # Accounts, Folders, SSH, Apps, Inspector & Settings
+└── tests/                       # Complete pytest test suite (22 unit tests)
+`
 
 ---
 
-## 🛡️ Security Note
-All sensitive tokens (PATs) are kept strictly in the OS-level credential vault (Windows Credential Manager) and are never stored in plain text files.
+## 🛠️ How It Solves Common Multi-Account Problems
+
+### Problem 1: VS Code Uses the Wrong Account for Commits / Pushes
+* **Cause**: VS Code has a built-in GitHub authentication provider (github.gitAuthentication: true) and Windows Credential Manager caches one global HTTPS token for git:https://github.com.
+* **Solution**:
+  1. Open **🧩 External Apps & Integrations** and click **"⚡ Apply Isolation to All IDEs"**.
+  2. Click **"🚀 Convert All HTTPS Repos to SSH"** to route remotes through git@github-<profile>:owner/repo.git.
+
+### Problem 2: Permission denied (publickey) on Git Push
+* **Cause**: Git on Windows doesn't know which SSH key to offer, or network firewalls block standard SSH port 22.
+* **Solution**:
+  * The app automatically configures ~/.ssh/config using **Port 443** (ssh.github.com) and IdentitiesOnly yes for each profile.
+
+### Problem 3: Personal Email Showing on Work Repositories (or vice versa)
+* **Cause**: Global user.email applies everywhere unless overridden per repository.
+* **Solution**:
+  * Map your D:/Personal folder to your Personal profile and D:/Professional to your Work profile. Git's native includeIf automatically switches the commit author based on folder path.
+
+---
+
+## 🛡️ Security Architecture
+
+* **Zero Plaintext Tokens**: Personal Access Tokens (PATs) are encrypted and stored inside the **Windows Credential Manager** via the OS keyring service.
+* **Atomic File Writes**: All configuration files (~/.gitconfig, ~/.ssh/config, ~/.gitconfig-*) are written to temporary files and atomically replaced to prevent file corruption.
+* **Identities Only**: SSH host aliases strictly enforce IdentitiesOnly yes to prevent credential leakage across sessions.
+
+---
+
+## 📄 License
+
+This project is licensed under the [MIT License](LICENSE).

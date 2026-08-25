@@ -1,11 +1,12 @@
 """Universal Apps & Integrations View displaying all auto-discovered Git applications, IDEs, and credentials."""
 from pathlib import Path
-import threading
 from typing import Callable, Optional
 import customtkinter as ctk
 
 from github_account_manager.services.manager import AccountManager
+from github_account_manager.ui.async_runner import run_async
 from github_account_manager.ui.components.dialogs import ConfirmDeleteDialog
+from github_account_manager.ui.components.info_banner import InfoBanner
 from github_account_manager.ui.components.status_badge import StatusBadge
 from github_account_manager.ui.theme import (
     ACCENT_BLUE,
@@ -66,7 +67,7 @@ class AppsView(ctk.CTkFrame):
             text_color=TEXT_SECONDARY,
         ).pack(anchor="w", pady=(3, 0))
 
-        refresh_btn = ctk.CTkButton(
+        self.refresh_btn = ctk.CTkButton(
             header,
             text="🔄 Scan Apps",
             width=110,
@@ -79,7 +80,7 @@ class AppsView(ctk.CTkFrame):
             border_color=BORDER_COLOR,
             command=self.refresh,
         )
-        refresh_btn.pack(side="right")
+        self.refresh_btn.pack(side="right")
 
         # Scrollable Content
         self.scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
@@ -88,17 +89,43 @@ class AppsView(ctk.CTkFrame):
         self.refresh()
 
     def refresh(self):
-        for widget in self.scroll.winfo_children():
-            widget.destroy()
+        def task():
+            apps = self.manager.app_service.detect_all_installed_apps()
+            creds = self.manager.app_service.list_windows_git_credentials()
+            repos = self.manager.app_service.scan_repositories(self.manager.settings.folder_mappings)
+            return apps, creds, repos
 
-        self._render_detected_apps_section()
-        self._render_credentials_section()
-        self._render_repo_converter_section()
+        def on_done(data):
+            apps, creds, repos = data
+            for widget in self.scroll.winfo_children():
+                widget.destroy()
+
+            # Contextual explanation banner
+            InfoBanner(
+                self.scroll,
+                title="How App & IDE Isolation Works",
+                what_it_does="Discovers external code editors, clears cached Windows credentials, and converts repo remotes to dedicated SSH aliases.",
+                why_needed="IDEs (like VS Code/Cursor) and Windows Credential Manager inject global credentials that override local folder rules and cause 'Permission Denied' errors.",
+                how_it_works="Disables built-in IDE Git authentication ('github.gitAuthentication: false') and switches repository remotes to dedicated SSH host aliases.",
+                icon="🧩",
+            ).pack(fill="x", pady=(0, 15))
+
+            self._render_detected_apps_section(apps)
+            self._render_credentials_section(creds)
+            self._render_repo_converter_section(repos)
+
+        run_async(
+            self,
+            task_fn=task,
+            on_success=on_done,
+            loading_btn=self.refresh_btn,
+            loading_text="⏳ Scanning...",
+            error_title="App Scan Error",
+        )
 
     # --- Section 1: Auto-Discovered Applications ---
 
-    def _render_detected_apps_section(self):
-        apps = self.manager.app_service.detect_all_installed_apps()
+    def _render_detected_apps_section(self, apps: list):
         ide_apps = [a for a in apps if a.get("supports_isolation")]
         needs_isolation = [a for a in ide_apps if not a.get("is_isolated")]
 
@@ -124,8 +151,8 @@ class AppsView(ctk.CTkFrame):
                 fg_color=ACCENT_GREEN,
                 hover_color=ACCENT_GREEN_HOVER,
                 text_color="#ffffff",
-                command=self._apply_isolation_to_all,
             )
+            bulk_btn.configure(command=lambda b=bulk_btn: self._apply_isolation_to_all(b))
             bulk_btn.pack(side="right")
 
         body = ctk.CTkFrame(card, fg_color="transparent")
@@ -182,7 +209,7 @@ class AppsView(ctk.CTkFrame):
             bot_line.pack(fill="x", padx=14, pady=(0, 10))
 
             if not app.get("is_isolated"):
-                ctk.CTkButton(
+                iso_btn = ctk.CTkButton(
                     bot_line,
                     text=f"⚡ Enable Folder Isolation in {app['name']}",
                     font=FONT_SMALL_BOLD,
@@ -190,10 +217,11 @@ class AppsView(ctk.CTkFrame):
                     fg_color=ACCENT_GREEN,
                     hover_color=ACCENT_GREEN_HOVER,
                     text_color="#ffffff",
-                    command=lambda i=app["id"]: self._apply_app_isolation(i),
-                ).pack(side="left", padx=(0, 8))
+                )
+                iso_btn.configure(command=lambda i=app["id"], b=iso_btn: self._apply_app_isolation(i, b))
+                iso_btn.pack(side="left", padx=(0, 8))
             else:
-                ctk.CTkButton(
+                rst_btn = ctk.CTkButton(
                     bot_line,
                     text="↩️ Restore Defaults",
                     font=FONT_SMALL,
@@ -203,33 +231,73 @@ class AppsView(ctk.CTkFrame):
                     text_color=BTN_SECONDARY_TEXT,
                     border_width=1,
                     border_color=BORDER_COLOR,
-                    command=lambda i=app["id"]: self._restore_app_defaults(i),
-                ).pack(side="left")
+                )
+                rst_btn.configure(command=lambda i=app["id"], b=rst_btn: self._restore_app_defaults(i, b))
+                rst_btn.pack(side="left")
 
-    def _apply_app_isolation(self, app_id: str):
-        success, msg = self.manager.app_service.apply_isolation_to_app(app_id)
-        if success:
-            self.on_notify("Configured", msg)
+    def _apply_app_isolation(self, app_id: str, btn: Optional[ctk.CTkButton] = None):
+        def task():
+            return self.manager.app_service.apply_isolation_to_app(app_id)
+
+        def on_done(res):
+            success, msg = res
+            if success:
+                self.on_notify("Configured", msg)
+                self.refresh()
+            else:
+                self.on_notify("Error", msg, is_error=True)
+
+        run_async(
+            self,
+            task_fn=task,
+            on_success=on_done,
+            loading_btn=btn,
+            loading_text="⏳ Applying...",
+            error_title="IDE Configuration Error",
+        )
+
+    def _apply_isolation_to_all(self, btn: Optional[ctk.CTkButton] = None):
+        def task():
+            return self.manager.app_service.apply_isolation_to_all_ides()
+
+        def on_done(res):
+            count, msgs = res
+            self.on_notify("IDEs Configured", f"Successfully applied folder isolation to {count} IDEs!")
             self.refresh()
-        else:
-            self.on_notify("Error", msg, is_error=True)
 
-    def _apply_isolation_to_all(self):
-        count, msgs = self.manager.app_service.apply_isolation_to_all_ides()
-        self.on_notify("IDEs Configured", f"Successfully applied folder isolation to {count} IDEs!")
-        self.refresh()
+        run_async(
+            self,
+            task_fn=task,
+            on_success=on_done,
+            loading_btn=btn,
+            loading_text="⏳ Applying to All...",
+            error_title="IDE Bulk Isolation Error",
+        )
 
-    def _restore_app_defaults(self, app_id: str):
-        success, msg = self.manager.app_service.restore_defaults_for_app(app_id)
-        if success:
-            self.on_notify("Restored", msg)
-            self.refresh()
-        else:
-            self.on_notify("Error", msg, is_error=True)
+    def _restore_app_defaults(self, app_id: str, btn: Optional[ctk.CTkButton] = None):
+        def task():
+            return self.manager.app_service.restore_defaults_for_app(app_id)
+
+        def on_done(res):
+            success, msg = res
+            if success:
+                self.on_notify("Restored", msg)
+                self.refresh()
+            else:
+                self.on_notify("Error", msg, is_error=True)
+
+        run_async(
+            self,
+            task_fn=task,
+            on_success=on_done,
+            loading_btn=btn,
+            loading_text="⏳ Restoring...",
+            error_title="Restore Defaults Error",
+        )
 
     # --- Section 2: Windows Git Credential Manager (GCM) ---
 
-    def _render_credentials_section(self):
+    def _render_credentials_section(self, creds: list):
         card = ctk.CTkFrame(self.scroll, fg_color=BG_CARD, corner_radius=8, border_width=1, border_color=BORDER_COLOR)
         card.pack(fill="x", pady=(0, 16))
 
@@ -254,8 +322,6 @@ class AppsView(ctk.CTkFrame):
             text_color=TEXT_SECONDARY,
             justify="left",
         ).pack(anchor="w", pady=(0, 10))
-
-        creds = self.manager.app_service.list_windows_git_credentials()
 
         if not creds:
             empty_box = ctk.CTkFrame(body, fg_color=BG_INSET, corner_radius=6, border_width=1, border_color=BORDER_COLOR)
@@ -308,8 +374,8 @@ class AppsView(ctk.CTkFrame):
                     text_color=BTN_SECONDARY_TEXT,
                     border_width=1,
                     border_color=BORDER_COLOR,
-                    command=lambda t=target, u=user: self._delete_credential(t, u),
                 )
+                del_btn.configure(command=lambda t=target, u=user, b=del_btn: self._delete_credential(t, u, b))
                 del_btn.pack(side="right")
 
         gcm_btn_row = ctk.CTkFrame(body, fg_color="transparent")
@@ -327,14 +393,27 @@ class AppsView(ctk.CTkFrame):
         )
         http_path_btn.pack(side="left")
 
-    def _delete_credential(self, target: str, user: str):
+    def _delete_credential(self, target: str, user: str, btn: Optional[ctk.CTkButton] = None):
         def confirm():
-            success, msg = self.manager.app_service.delete_windows_credential(target)
-            if success:
-                self.on_notify("Credential Cleared", f"Cleared cached credential for @{user}.")
-                self.refresh()
-            else:
-                self.on_notify("Error", msg, is_error=True)
+            def task():
+                return self.manager.app_service.delete_windows_credential(target)
+
+            def on_done(res):
+                success, msg = res
+                if success:
+                    self.on_notify("Credential Cleared", f"Cleared cached credential for @{user}.")
+                    self.refresh()
+                else:
+                    self.on_notify("Error", msg, is_error=True)
+
+            run_async(
+                self,
+                task_fn=task,
+                on_success=on_done,
+                loading_btn=btn,
+                loading_text="⏳ Clearing...",
+                error_title="Credential Clear Error",
+            )
 
         clean_t = target.replace("LegacyGeneric:target=", "")
         ConfirmDeleteDialog(
@@ -347,15 +426,21 @@ class AppsView(ctk.CTkFrame):
         )
 
     def _enable_http_path(self):
-        success, msg = self.manager.app_service.enable_git_credential_use_http_path()
-        if success:
-            self.on_notify("Configured", msg)
-        else:
-            self.on_notify("Error", msg, is_error=True)
+        def task():
+            return self.manager.app_service.enable_git_credential_use_http_path()
+
+        def on_done(res):
+            success, msg = res
+            if success:
+                self.on_notify("Configured", msg)
+            else:
+                self.on_notify("Error", msg, is_error=True)
+
+        run_async(self, task_fn=task, on_success=on_done, error_title="Git Config Error")
 
     # --- Section 3: Repository Remote Converter (HTTPS -> SSH) ---
 
-    def _render_repo_converter_section(self):
+    def _render_repo_converter_section(self, repos: list):
         card = ctk.CTkFrame(self.scroll, fg_color=BG_CARD, corner_radius=8, border_width=1, border_color=BORDER_COLOR)
         card.pack(fill="x", pady=(0, 16))
 
@@ -369,7 +454,6 @@ class AppsView(ctk.CTkFrame):
             text_color=TEXT_PRIMARY,
         ).pack(side="left")
 
-        repos = self.manager.app_service.scan_repositories(self.manager.settings.folder_mappings)
         https_count = sum(1 for r in repos if r.get("protocol") == "HTTPS")
 
         if https_count > 0:
@@ -381,8 +465,8 @@ class AppsView(ctk.CTkFrame):
                 fg_color=ACCENT_GREEN,
                 hover_color=ACCENT_GREEN_HOVER,
                 text_color="#ffffff",
-                command=lambda: self._convert_all_to_ssh(repos),
             )
+            bulk_btn.configure(command=lambda b=bulk_btn: self._convert_all_to_ssh(repos, b))
             bulk_btn.pack(side="right")
 
         body = ctk.CTkFrame(card, fg_color="transparent")
@@ -390,7 +474,7 @@ class AppsView(ctk.CTkFrame):
 
         ctk.CTkLabel(
             body,
-            text="SSH remotes (git@github.com:owner/repo.git) are 100% immune to IDE credential hijacking.\n"
+            text="SSH host aliases (e.g. git@github-personal:owner/repo.git) are 100% immune to IDE credential hijacking.\n"
                  "Converting repositories from HTTPS to SSH ensures Git always authenticates with the correct account.",
             font=FONT_BODY,
             text_color=TEXT_SECONDARY,
@@ -450,6 +534,8 @@ class AppsView(ctk.CTkFrame):
             text_color=TEXT_SECONDARY,
         ).pack(side="left")
 
+        account_slug = acc.name.lower().replace(" ", "-") if acc else None
+
         if proto == "HTTPS":
             conv_btn = ctk.CTkButton(
                 bot_line,
@@ -460,8 +546,8 @@ class AppsView(ctk.CTkFrame):
                 fg_color=ACCENT_GREEN,
                 hover_color=ACCENT_GREEN_HOVER,
                 text_color="#ffffff",
-                command=lambda p=repo["path"]: self._convert_repo(p, "ssh"),
             )
+            conv_btn.configure(command=lambda p=repo["path"], s=account_slug, b=conv_btn: self._convert_repo(p, "ssh", s, b))
             conv_btn.pack(side="right")
         elif proto == "SSH":
             conv_btn = ctk.CTkButton(
@@ -475,24 +561,52 @@ class AppsView(ctk.CTkFrame):
                 text_color=BTN_SECONDARY_TEXT,
                 border_width=1,
                 border_color=BORDER_COLOR,
-                command=lambda p=repo["path"]: self._convert_repo(p, "https"),
             )
+            conv_btn.configure(command=lambda p=repo["path"], b=conv_btn: self._convert_repo(p, "https", None, b))
             conv_btn.pack(side="right")
 
-    def _convert_repo(self, repo_path: str, to_protocol: str):
-        success, msg = self.manager.app_service.convert_repo_remote(repo_path, to_protocol)
-        if success:
-            self.on_notify("Remote Updated", msg)
-            self.refresh()
-        else:
-            self.on_notify("Error", msg, is_error=True)
+    def _convert_repo(self, repo_path: str, to_protocol: str, account_slug: Optional[str] = None, btn: Optional[ctk.CTkButton] = None):
+        def task():
+            return self.manager.app_service.convert_repo_remote(repo_path, to_protocol, account_slug)
 
-    def _convert_all_to_ssh(self, repos: list):
-        converted = 0
-        for r in repos:
-            if r.get("protocol") == "HTTPS":
-                s, _ = self.manager.app_service.convert_repo_remote(r["path"], "ssh")
-                if s:
-                    converted += 1
-        self.on_notify("Bulk Converted", f"Successfully converted {converted} repositories to SSH remotes!")
-        self.refresh()
+        def on_done(res):
+            success, msg = res
+            if success:
+                self.on_notify("Remote Updated", msg)
+                self.refresh()
+            else:
+                self.on_notify("Error", msg, is_error=True)
+
+        run_async(
+            self,
+            task_fn=task,
+            on_success=on_done,
+            loading_btn=btn,
+            loading_text="⏳",
+            error_title="Remote Conversion Error",
+        )
+
+    def _convert_all_to_ssh(self, repos: list, btn: Optional[ctk.CTkButton] = None):
+        def task():
+            converted = 0
+            for r in repos:
+                if r.get("protocol") == "HTTPS":
+                    acc = next((a for a in self.manager.settings.accounts if a.id == r.get("account_id")), None)
+                    slug = acc.name.lower().replace(" ", "-") if acc else None
+                    s, _ = self.manager.app_service.convert_repo_remote(r["path"], "ssh", slug)
+                    if s:
+                        converted += 1
+            return converted
+
+        def on_done(converted):
+            self.on_notify("Bulk Converted", f"Successfully converted {converted} repositories to SSH remotes!")
+            self.refresh()
+
+        run_async(
+            self,
+            task_fn=task,
+            on_success=on_done,
+            loading_btn=btn,
+            loading_text="⏳ Converting All...",
+            error_title="Bulk Conversion Error",
+        )
