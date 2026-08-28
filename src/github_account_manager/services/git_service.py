@@ -65,6 +65,8 @@ class GitService:
             content_lines.extend([
                 "[core]",
                 f'\tsshCommand = ssh -i "{ssh_posix}" -o IdentitiesOnly=yes',
+                '[url "git@github.com:"]',
+                "\tinsteadOf = https://github.com/",
             ])
 
         content_lines.append("")
@@ -178,7 +180,7 @@ class GitService:
         for acc in accounts:
             if acc.ssh_key_path:
                 key_posix = Path(acc.ssh_key_path).as_posix()
-                slug = acc.name.lower().replace(" ", "-").replace("_", "-")
+                slug = acc.slug
                 lines.extend([
                     f"# Account Profile: {acc.name} ({acc.email})",
                     f"Host github-{slug}",
