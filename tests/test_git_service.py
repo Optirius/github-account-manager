@@ -39,6 +39,6 @@ def test_git_service_sync_and_includeif(tmp_path):
     content = gitconfig_path.read_text(encoding="utf-8")
     assert "[core]" in content
     assert 'includeIf "gitdir/i:D:/Personal/"' in content
-    assert 'path = ~/.gitconfig-personal' in content
+    assert '.gitconfig-personal' in content
     assert 'includeIf "gitdir/i:D:/Professional/"' in content
-    assert 'path = ~/.gitconfig-work' in content
+    assert '.gitconfig-work' in content

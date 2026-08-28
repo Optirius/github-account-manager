@@ -55,9 +55,23 @@ class AccountsView(ctk.CTkFrame):
             text_color=TEXT_SECONDARY,
         ).pack(anchor="w", pady=(3, 0))
 
-        # Add Account Button
+        btn_box = ctk.CTkFrame(header, fg_color="transparent")
+        btn_box.pack(side="right")
+
+        repair_btn = ctk.CTkButton(
+            btn_box,
+            text="⚡ Auto-Repair Setup & Sync",
+            font=FONT_BODY,
+            fg_color=ACCENT_GREEN,
+            hover_color=ACCENT_GREEN_HOVER,
+            text_color="#ffffff",
+            command=self._handle_auto_repair,
+            height=36,
+        )
+        repair_btn.pack(side="left", padx=(0, 8))
+
         add_btn = ctk.CTkButton(
-            header,
+            btn_box,
             text="+ Add Account",
             font=FONT_BODY,
             fg_color=ACCENT_GREEN,
@@ -66,7 +80,7 @@ class AccountsView(ctk.CTkFrame):
             command=self._open_add_dialog,
             height=36,
         )
-        add_btn.pack(side="right")
+        add_btn.pack(side="left")
 
         # Scrollable Cards Container
         self.cards_scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
@@ -201,4 +215,28 @@ class AccountsView(ctk.CTkFrame):
             task_fn=task,
             on_success=on_done,
             error_title="SSH Connection Error",
+        )
+
+    def _handle_auto_repair(self):
+        def task():
+            return self.manager.auto_repair_and_sync()
+
+        def on_done(res):
+            count, msgs = res
+            msg_text = "\n".join(msgs) if msgs else "Configuration is up to date."
+            ResultModalDialog(
+                self.winfo_toplevel(),
+                title="Auto-Repair & Sync",
+                heading=f"Repaired & Synchronized ({count} actions)",
+                content=msg_text,
+                is_success=True,
+            )
+            self.on_notify("Auto-Repair Complete", f"Re-linked SSH keys and synced Git configuration.")
+            self.refresh()
+
+        run_async(
+            self,
+            task_fn=task,
+            on_success=on_done,
+            error_title="Auto-Repair Error",
         )

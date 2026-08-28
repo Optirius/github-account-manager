@@ -69,3 +69,20 @@ def test_convert_repo_remote(tmp_path):
         success, msg = service.convert_repo_remote(repo_dir, "ssh")
         assert success is True
         assert "git@github.com:Optirius/my-portfolio.git" in msg
+
+
+def test_delete_windows_credential_alias():
+    service = AppIntegrationService()
+    with patch.object(service, "delete_windows_git_credential", return_value=(True, "Deleted")):
+        success, msg = service.delete_windows_credential("git:https://github.com")
+        assert success is True
+        assert msg == "Deleted"
+
+
+def test_enable_git_credential_use_http_path():
+    service = AppIntegrationService()
+    with patch("github_account_manager.services.app_integration_service.safe_subprocess_run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0, stderr="")
+        success, msg = service.enable_git_credential_use_http_path()
+        assert success is True
+        assert "credential.useHttpPath" in msg

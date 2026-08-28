@@ -76,3 +76,34 @@ def test_manager_delete_ssh_key_unlinks_account(tmp_path):
     refreshed_acc = next(a for a in manager.settings.accounts if a.id == acc.id)
     assert refreshed_acc.ssh_key_path is None
 
+
+def test_auto_repair_and_sync(tmp_path):
+    config_file = tmp_path / "config.json"
+    gitconfig = tmp_path / ".gitconfig"
+    ssh_dir = tmp_path / ".ssh"
+    ssh_dir.mkdir()
+
+    personal_key = ssh_dir / "id_ed25519_desktop_personal"
+    personal_key.write_text("personal_key_content", encoding="utf-8")
+    (ssh_dir / "id_ed25519_desktop_personal.pub").write_text("ssh-ed25519 AAA... personal@gmail.com", encoding="utf-8")
+
+    manager = AccountManager(
+        config_file=config_file,
+        gitconfig_path=gitconfig,
+        ssh_dir=ssh_dir,
+    )
+
+    acc = manager.add_account(
+        name="Tahmid Hossain",
+        email="tahmid95.aquarius@gmail.com",
+        git_name="Tahmid Hossain",
+        username="Optirius",
+        ssh_key_path=None,  # Intentionally null to test auto-repair
+    )
+    assert acc.ssh_key_path is None
+
+    count, msgs = manager.auto_repair_and_sync()
+    assert count >= 1
+    assert acc.ssh_key_path == str(personal_key)
+
+

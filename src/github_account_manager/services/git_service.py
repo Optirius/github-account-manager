@@ -64,7 +64,7 @@ class GitService:
             ssh_posix = Path(clean_ssh).as_posix()
             content_lines.extend([
                 "[core]",
-                f"\tsshCommand = ssh -i {ssh_posix} -o IdentitiesOnly=yes",
+                f'\tsshCommand = ssh -i "{ssh_posix}" -o IdentitiesOnly=yes',
             ])
 
         content_lines.append("")
@@ -117,7 +117,7 @@ class GitService:
                 j = i + 1
                 is_managed = False
                 while j < len(lines) and not lines[j].strip().startswith("["):
-                    if re.search(r'path\s*=\s*~?/?\.gitconfig-', lines[j], re.IGNORECASE):
+                    if re.search(r'path\s*=\s*.*\.gitconfig-', lines[j], re.IGNORECASE):
                         is_managed = True
                     j += 1
 
@@ -141,8 +141,9 @@ class GitService:
                 continue
 
             normalized_folder = mapping.normalized_path
+            acc_profile_path = (self.home_dir / acc.config_filename).as_posix()
             include_blocks.append(
-                f'[includeIf "gitdir/i:{normalized_folder}"]\n\tpath = ~/{acc.config_filename}'
+                f'[includeIf "gitdir/i:{normalized_folder}"]\n\tpath = {acc_profile_path}'
             )
 
         if include_blocks:

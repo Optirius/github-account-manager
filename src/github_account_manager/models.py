@@ -52,8 +52,9 @@ class Account(BaseModel):
 
     @property
     def slug(self) -> str:
-        """Sanitized lowercase slug suitable for filenames."""
-        cleaned = re.sub(r"[^a-zA-Z0-9_\-]", "-", self.name.strip().lower())
+        """Sanitized lowercase slug suitable for filenames, ensuring uniqueness even with identical display names."""
+        base = f"{self.name}-{self.username}" if self.username else f"{self.name}-{self.id[:6]}"
+        cleaned = re.sub(r"[^a-zA-Z0-9_\-]", "-", base.strip().lower())
         return re.sub(r"-+", "-", cleaned).strip("-") or "account"
 
     @property

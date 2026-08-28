@@ -9,8 +9,8 @@ def test_account_model():
         username="tahmid95",
         ssh_key_path="C:/Users/ASUS/.ssh/id_ed25519_personal",
     )
-    assert acc.slug == "personal-account"
-    assert acc.config_filename == ".gitconfig-personal-account"
+    assert acc.slug == "personal-account-tahmid95"
+    assert acc.config_filename == ".gitconfig-personal-account-tahmid95"
     assert acc.username == "tahmid95"
 
 

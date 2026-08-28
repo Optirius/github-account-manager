@@ -183,6 +183,25 @@ class AppIntegrationService:
             return True, f"Successfully deleted credential: {target}"
         return False, f"Failed to delete credential: {target}"
 
+    def delete_windows_credential(self, target: str) -> Tuple[bool, str]:
+        """Alias for delete_windows_git_credential for UI compatibility."""
+        return self.delete_windows_git_credential(target)
+
+    def enable_git_credential_use_http_path(self) -> Tuple[bool, str]:
+        """Configure git config --global credential.useHttpPath true so HTTPS credentials are scoped per repo path."""
+        try:
+            res = safe_subprocess_run(
+                ["git", "config", "--global", "credential.useHttpPath", "true"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if res.returncode == 0:
+                return True, "Enabled 'credential.useHttpPath = true' in global Git config."
+            return False, f"Git error: {res.stderr.strip()}"
+        except Exception as e:
+            return False, f"Failed to set credential.useHttpPath: {e}"
+
     def delete_all_conflicting_credentials(self) -> Tuple[int, List[str]]:
         """Delete all cached github.com credentials."""
         creds = self.list_windows_git_credentials()
