@@ -77,3 +77,5 @@ ehthumbs_vista.db
 *.bak
 *.local
 graphify-out/
+publish/
+Publish/

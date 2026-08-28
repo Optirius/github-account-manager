@@ -4,10 +4,10 @@ from github_account_manager.models import Account, FolderMapping, SSHKeyInfo, Ap
 def test_account_model():
     acc = Account(
         name="Personal Account",
-        email="tahmid95.hossain@gmail.com",
-        git_name="Tahmid Hossain",
+        email="personal@example.com",
+        git_name="Personal Dev",
         username="tahmid95",
-        ssh_key_path="C:/Users/ASUS/.ssh/id_ed25519_personal",
+        ssh_key_path="C:/Users/user/.ssh/id_ed25519_personal",
     )
     assert acc.slug == "personal-account-tahmid95"
     assert acc.config_filename == ".gitconfig-personal-account-tahmid95"

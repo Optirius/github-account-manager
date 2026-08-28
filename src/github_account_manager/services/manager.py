@@ -67,46 +67,33 @@ class AccountManager:
 
     def _auto_discover_existing_setup(self) -> None:
         """Import existing .gitconfig and SSH keys on first launch."""
-        home = Path.home()
         ssh_keys = self.ssh_service.list_keys()
 
-        # Check for personal key
         personal_key = next((k for k in ssh_keys if "personal" in k.name.lower()), None)
         prof_key = next((k for k in ssh_keys if "prof" in k.name.lower() or "work" in k.name.lower()), None)
 
         created_accounts = []
 
-        if personal_key or (home / ".gitconfig-personal").exists():
+        if personal_key:
             acc = Account(
                 name="Personal",
-                email="tahmid95.hossain@gmail.com",
-                git_name="Tahmid Hossain",
-                ssh_key_path=personal_key.private_key_path if personal_key else None,
+                email="personal@example.com",
+                git_name="Personal Developer",
+                ssh_key_path=personal_key.private_key_path,
             )
             created_accounts.append(acc)
 
-        if prof_key or (home / ".gitconfig-professional").exists():
+        if prof_key:
             acc = Account(
-                name="Professional",
-                email="tahmid.hossain@selisegroup.com",
-                git_name="Tahmid Hossain",
-                ssh_key_path=prof_key.private_key_path if prof_key else None,
+                name="Work",
+                email="work@example.com",
+                git_name="Work Developer",
+                ssh_key_path=prof_key.private_key_path,
             )
             created_accounts.append(acc)
 
         if created_accounts:
             self.settings.accounts = created_accounts
-
-            # Check for folders D:\Personal and D:\Professional
-            if Path("D:/Personal").exists() and len(created_accounts) >= 1:
-                self.settings.folder_mappings.append(
-                    FolderMapping(folder_path="D:/Personal", account_id=created_accounts[0].id)
-                )
-            if Path("D:/Professional").exists() and len(created_accounts) >= 2:
-                self.settings.folder_mappings.append(
-                    FolderMapping(folder_path="D:/Professional", account_id=created_accounts[1].id)
-                )
-
             self.save_settings()
 
     def auto_repair_and_sync(self) -> Tuple[int, List[str]]:
@@ -123,17 +110,17 @@ class AccountManager:
         for acc in self.settings.accounts:
             if not acc.ssh_key_path or not Path(acc.ssh_key_path).exists():
                 matched_key = None
-                acc_terms = [t for t in [acc.name, acc.username, acc.email.split("@")[0]] if t]
+                acc_terms = [t for t in [acc.name, acc.username, acc.email.split("@")[0] if "@" in acc.email else ""] if t]
                 for key in ssh_keys:
                     kname = key.name.lower()
                     if any(term.lower() in kname for term in acc_terms if len(term) > 2):
                         matched_key = key
                         break
                     # Naming fallbacks
-                    if "personal" in kname and ("personal" in acc.name.lower() or "gmail" in acc.email.lower() or "optirius" in acc.username.lower()):
+                    if "personal" in kname and ("personal" in acc.name.lower() or "personal" in acc.email.lower()):
                         matched_key = key
                         break
-                    if ("work" in kname or "desktop_work" in kname or "prof" in kname) and ("work" in acc.name.lower() or "selise" in acc.email.lower() or "selise" in acc.username.lower()):
+                    if ("work" in kname or "prof" in kname) and ("work" in acc.name.lower() or "prof" in acc.name.lower() or "work" in acc.email.lower()):
                         matched_key = key
                         break
 
@@ -141,35 +128,19 @@ class AccountManager:
                     acc.ssh_key_path = matched_key.private_key_path
                     repairs.append(f"Linked SSH key '{matched_key.name}' to profile '{acc.name} ({acc.username or acc.email})'")
 
-        # 2. Re-bind folder mappings if mapped folders point to wrong accounts
-        if len(self.settings.accounts) >= 2:
-            personal_acc = next((a for a in self.settings.accounts if "gmail" in a.email.lower() or "personal" in a.name.lower() or "optirius" in a.username.lower()), None)
-            work_acc = next((a for a in self.settings.accounts if "selise" in a.email.lower() or "work" in a.name.lower() or "prof" in a.name.lower()), None)
-
-            if personal_acc and work_acc:
-                for m in self.settings.folder_mappings:
-                    m_lower = m.folder_path.lower()
-                    if ("prof" in m_lower or "work" in m_lower) and m.account_id != work_acc.id:
-                        m.account_id = work_acc.id
-                        repairs.append(f"Re-bound directory '{m.folder_path}' to Work profile '{work_acc.name} ({work_acc.username})'")
-                    elif "personal" in m_lower and m.account_id != personal_acc.id:
-                        m.account_id = personal_acc.id
-                        repairs.append(f"Re-bound directory '{m.folder_path}' to Personal profile '{personal_acc.name} ({personal_acc.username})'")
-
-        # 3. Clean up legacy clashing single-slug config files (e.g. .gitconfig-tahmid-hossain)
+        # 2. Clean up legacy clashing single-slug config files (e.g. .gitconfig-tahmid-hossain)
         try:
             for item in home.glob(".gitconfig-*"):
-                if item.name in [".gitconfig-tahmid-hossain", ".gitconfig-personal", ".gitconfig-professional", ".gitconfig-work"]:
-                    if not any(acc.config_filename == item.name for acc in self.settings.accounts):
-                        try:
-                            item.unlink()
-                            repairs.append(f"Removed legacy profile file '{item.name}'")
-                        except Exception:
-                            pass
+                if not any(acc.config_filename == item.name for acc in self.settings.accounts):
+                    try:
+                        item.unlink()
+                        repairs.append(f"Removed legacy profile file '{item.name}'")
+                    except Exception:
+                        pass
         except Exception:
             pass
 
-        # 4. Save and sync global git config
+        # 3. Save and sync global git config
         self.save_settings()
         self.sync_git()
         repairs.append("Synchronized global ~/.gitconfig and ~/.ssh/config")

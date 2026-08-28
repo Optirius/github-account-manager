@@ -86,7 +86,7 @@ class InspectorView(ctk.CTkFrame):
         row = ctk.CTkFrame(picker_card, fg_color="transparent")
         row.pack(fill="x", padx=16, pady=(0, 14))
 
-        self.path_entry = ctk.CTkEntry(row, placeholder_text="e.g. D:/Personal/Projects/my-project", height=36, font=FONT_BODY)
+        self.path_entry = ctk.CTkEntry(row, placeholder_text="e.g. ~/Projects/Personal/my-project", height=36, font=FONT_BODY)
         self.path_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
 
         if self.manager.settings.folder_mappings:

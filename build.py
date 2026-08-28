@@ -63,32 +63,43 @@ def run_pyinstaller(target_os: str):
     env["PYTHONIOENCODING"] = "utf-8"
     env["PYTHONUTF8"] = "1"
 
-    cmd = [
-        sys.executable,
-        "-m",
-        "PyInstaller",
-        "--noconfirm",
-        "--clean",
-        "--onefile",
-        "--name",
-        "github-account-manager",
-        "--windowed",
-        "--add-data",
-        f"{ctk_path}{sep}customtkinter",
-        "--collect-all",
-        "customtkinter",
-        "--collect-all",
-        "pydantic",
-        "--hidden-import",
-        "github_account_manager",
-        "--hidden-import",
-        "github_account_manager.platform.windows",
-        "--hidden-import",
-        "github_account_manager.platform.macos",
-        "--hidden-import",
-        "github_account_manager.platform.linux",
-        "main.py",
-    ]
+    spec_file = Path("github-account-manager.spec")
+    if spec_file.exists():
+        cmd = [
+            sys.executable,
+            "-m",
+            "PyInstaller",
+            "--noconfirm",
+            "--clean",
+            "github-account-manager.spec",
+        ]
+    else:
+        cmd = [
+            sys.executable,
+            "-m",
+            "PyInstaller",
+            "--noconfirm",
+            "--clean",
+            "--onefile",
+            "--name",
+            "github-account-manager",
+            "--windowed",
+            "--add-data",
+            f"{ctk_path}{sep}customtkinter",
+            "--collect-all",
+            "customtkinter",
+            "--collect-all",
+            "pydantic",
+            "--hidden-import",
+            "github_account_manager",
+            "--hidden-import",
+            "github_account_manager.platform.windows",
+            "--hidden-import",
+            "github_account_manager.platform.macos",
+            "--hidden-import",
+            "github_account_manager.platform.linux",
+            "main.py",
+        ]
 
     print("[BUILD] Running PyInstaller:", " ".join(cmd))
     res = subprocess.run(cmd, env=env)
@@ -144,18 +155,12 @@ def create_release_archive(target_os: str) -> Path:
 
 
 def publish_artifacts(target_os: str, archive_path: Path, publish_dir_str: Optional[str] = None):
-    pub_dir = None
     if publish_dir_str:
         pub_dir = Path(publish_dir_str)
     elif os.getenv("PUBLISH_DIR"):
         pub_dir = Path(os.getenv("PUBLISH_DIR"))
-    elif target_os == "windows":
-        candidate = Path("D:/Professional/Publish")
-        if candidate.parent.exists():
-            pub_dir = candidate
-
-    if not pub_dir:
-        return
+    else:
+        pub_dir = Path(__file__).parent / "publish"
 
     print(f"[PUBLISH] Publishing build output to: {pub_dir}...")
     pub_dir.mkdir(parents=True, exist_ok=True)

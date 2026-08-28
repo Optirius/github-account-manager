@@ -1,7 +1,10 @@
 # -*- mode: python ; coding: utf-8 -*-
+from pathlib import Path
+import customtkinter
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('D:/Personal/Projects/github-multi-account-manager/.venv/Lib/site-packages/customtkinter', 'customtkinter')]
+ctk_path = str(Path(customtkinter.__file__).parent)
+datas = [(ctk_path, 'customtkinter')]
 binaries = []
 hiddenimports = ['github_account_manager', 'github_account_manager.platform.windows', 'github_account_manager.platform.macos', 'github_account_manager.platform.linux']
 tmp_ret = collect_all('customtkinter')

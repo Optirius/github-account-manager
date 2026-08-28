@@ -7,9 +7,9 @@ from github_account_manager.services.app_integration_service import AppIntegrati
 
 def test_parse_owner_repo():
     service = AppIntegrationService()
-    assert service._parse_owner_repo("https://github.com/Optirius/my-repo.git") == "Optirius/my-repo"
-    assert service._parse_owner_repo("https://github.com/Optirius/my-repo") == "Optirius/my-repo"
-    assert service._parse_owner_repo("git@github.com:tahmid-selise/work-repo.git") == "tahmid-selise/work-repo"
+    assert service._parse_owner_repo("https://github.com/user-org/my-repo.git") == "user-org/my-repo"
+    assert service._parse_owner_repo("https://github.com/user-org/my-repo") == "user-org/my-repo"
+    assert service._parse_owner_repo("git@github.com:company-org/work-repo.git") == "company-org/work-repo"
     assert service._parse_owner_repo("ssh://git@github.com/org/proj.git") == "org/proj"
     assert service._parse_owner_repo("") == ""
 
@@ -62,13 +62,13 @@ def test_convert_repo_remote(tmp_path):
 
     service = AppIntegrationService()
 
-    with patch.object(service, "_get_repo_remote_url", return_value="https://github.com/Optirius/my-portfolio.git"), \
+    with patch.object(service, "_get_repo_remote_url", return_value="https://github.com/test-org/my-portfolio.git"), \
          patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(returncode=0)
 
         success, msg = service.convert_repo_remote(repo_dir, "ssh")
         assert success is True
-        assert "git@github.com:Optirius/my-portfolio.git" in msg
+        assert "git@github.com:test-org/my-portfolio.git" in msg
 
 
 def test_delete_windows_credential_alias():

@@ -70,8 +70,8 @@ class GuideView(ctk.CTkFrame):
 
         concept_text = (
             "Instead of switching accounts back and forth every time you open a project, you simply separate your projects by folder:\n\n"
-            "• Put your personal projects in your Personal folder (e.g. D:/Personal)\n"
-            "• Put your work projects in your Work folder (e.g. D:/Professional)\n\n"
+            "• Put your personal projects in your Personal folder (e.g. ~/Projects/Personal)\n"
+            "• Put your work projects in your Work folder (e.g. ~/Projects/Work)\n\n"
             "Git will automatically detect which folder you are in. When you make a commit or push, Git uses the correct name, email, and SSH key automatically. You never have to switch accounts by hand again!"
         )
         ctk.CTkLabel(
@@ -151,7 +151,7 @@ class GuideView(ctk.CTkFrame):
             ),
             (
                 "Step 3: 📁 Choose Your Folders",
-                "Pick the main folders on your computer for each account:\n• Example: D:/Personal -> Personal Profile\n• Example: D:/Professional -> Work Profile",
+                "Pick the main folders on your computer for each account:\n• Example: ~/Projects/Personal -> Personal Profile\n• Example: ~/Projects/Work -> Work Profile",
                 "folders",
                 "👉 Go to Folders",
             ),

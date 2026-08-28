@@ -108,7 +108,7 @@ class FoldersView(ctk.CTkFrame):
         InfoBanner(
             self.rows_scroll,
             title="How Directory Mappings Work",
-            what_it_does="Binds entire workspace directories (e.g. D:/Personal or D:/Professional) to a specific GitHub profile.",
+            what_it_does="Binds entire workspace directories (e.g. ~/Projects/Personal or ~/Projects/Work) to a specific GitHub profile.",
             why_needed="You never have to run 'git config user.email' manually again—Git automatically routes all repositories inside the folder to the correct profile.",
             how_it_works="Injects conditional '[includeIf \"gitdir/i:...\"]' blocks into ~/.gitconfig so Git natively activates the right identity on the fly.",
             icon="📁",
@@ -128,7 +128,7 @@ class FoldersView(ctk.CTkFrame):
             ).pack()
             ctk.CTkLabel(
                 empty_box,
-                text="Click '+ Map Directory' to link folders like D:/Personal to an account.",
+                text="Click '+ Map Directory' to link folders like ~/Projects/Personal to an account.",
                 font=FONT_BODY,
                 text_color=TEXT_MUTED,
             ).pack(pady=(4, 0))

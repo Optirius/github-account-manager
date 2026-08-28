@@ -139,7 +139,7 @@ class AddEditAccountDialog(BaseDialog):
 
         # Git Commit Author Name
         ctk.CTkLabel(scroll, text="Git Author Name (user.name):", font=FONT_BODY_BOLD, text_color=TEXT_PRIMARY).pack(anchor="w", pady=(5, 3))
-        self.git_name_entry = ctk.CTkEntry(scroll, placeholder_text="Tahmid Hossain", height=36, font=FONT_BODY)
+        self.git_name_entry = ctk.CTkEntry(scroll, placeholder_text="John Doe", height=36, font=FONT_BODY)
         self.git_name_entry.pack(fill="x", pady=(0, 12))
         if account:
             self.git_name_entry.insert(0, account.git_name)
@@ -493,7 +493,7 @@ class AddFolderMappingDialog(BaseDialog):
         folder_row = ctk.CTkFrame(container, fg_color="transparent")
         folder_row.pack(fill="x", pady=(0, 14))
 
-        self.path_entry = ctk.CTkEntry(folder_row, placeholder_text="D:/Personal or D:/Professional", height=36, font=FONT_BODY)
+        self.path_entry = ctk.CTkEntry(folder_row, placeholder_text="~/Projects/Personal or ~/Projects/Work", height=36, font=FONT_BODY)
         self.path_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
 
         browse_btn = ctk.CTkButton(

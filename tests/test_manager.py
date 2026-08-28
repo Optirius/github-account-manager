@@ -83,9 +83,9 @@ def test_auto_repair_and_sync(tmp_path):
     ssh_dir = tmp_path / ".ssh"
     ssh_dir.mkdir()
 
-    personal_key = ssh_dir / "id_ed25519_desktop_personal"
+    personal_key = ssh_dir / "id_ed25519_personal"
     personal_key.write_text("personal_key_content", encoding="utf-8")
-    (ssh_dir / "id_ed25519_desktop_personal.pub").write_text("ssh-ed25519 AAA... personal@gmail.com", encoding="utf-8")
+    (ssh_dir / "id_ed25519_personal.pub").write_text("ssh-ed25519 AAA... personal@example.com", encoding="utf-8")
 
     manager = AccountManager(
         config_file=config_file,
@@ -94,10 +94,10 @@ def test_auto_repair_and_sync(tmp_path):
     )
 
     acc = manager.add_account(
-        name="Tahmid Hossain",
-        email="tahmid95.aquarius@gmail.com",
-        git_name="Tahmid Hossain",
-        username="Optirius",
+        name="Personal Developer",
+        email="personal@example.com",
+        git_name="Personal Developer",
+        username="user_personal",
         ssh_key_path=None,  # Intentionally null to test auto-repair
     )
     assert acc.ssh_key_path is None

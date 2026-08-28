@@ -22,8 +22,8 @@ Instead of constantly changing your Git settings or logging in and out, you simp
 
 ```mermaid
 graph TD
-    A["Your Computer"] --> B["Personal Folder (e.g. D:/Personal)"]
-    A --> C["Work Folder (e.g. D:/Professional)"]
+    A["Your Computer"] --> B["Personal Folder (e.g. ~/Projects/Personal)"]
+    A --> C["Work Folder (e.g. ~/Projects/Work)"]
 
     B --> D["Automatically uses Personal Name, Email & SSH Key"]
     C --> E["Automatically uses Work Name, Email & SSH Key"]
@@ -64,8 +64,8 @@ Setting up takes less than 2 minutes:
 
 ### 3. 📁 Choose Folders
 * Click **`+ Map Directory`** to link your folders:
-  * `D:/Personal` &rarr; Assigned to **Personal**
-  * `D:/Professional` &rarr; Assigned to **Work**
+  * `~/Projects/Personal` &rarr; Assigned to **Personal**
+  * `~/Projects/Work` &rarr; Assigned to **Work**
 
 ### 4. 🧩 External Apps & IDEs
 * Click **`⚡ Apply Isolation to All IDEs`** so VS Code, Rider, Visual Studio, and Cursor use the right folder identity.

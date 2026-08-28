@@ -18,14 +18,14 @@ def test_git_service_sync_and_includeif(tmp_path):
         name="Personal",
         email="personal@example.com",
         git_name="Personal Dev",
-        ssh_key_path="C:/Users/ASUS/.ssh/id_ed25519_personal",
+        ssh_key_path="C:/Users/user/.ssh/id_ed25519_personal",
     )
     acc2 = Account(
         id="acc-work",
         name="Work",
-        email="work@selise.com",
+        email="work@example.com",
         git_name="Work Dev",
-        ssh_key_path="C:/Users/ASUS/.ssh/id_ed25519_work",
+        ssh_key_path="C:/Users/user/.ssh/id_ed25519_work",
     )
 
     mappings = [

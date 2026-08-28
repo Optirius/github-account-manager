@@ -8,17 +8,17 @@ def test_lookup_user_by_username():
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.json.return_value = {
-        "login": "tahmid95",
-        "name": "Tahmid Hossain",
-        "email": "tahmid95.hossain@gmail.com",
+        "login": "dev-user",
+        "name": "Dev User",
+        "email": "user@example.com",
         "avatar_url": "https://avatars.githubusercontent.com/u/12345",
     }
 
     with patch("httpx.Client.get", return_value=mock_response):
-        result = service.lookup_user_by_query("tahmid95")
+        result = service.lookup_user_by_query("dev-user")
         assert result["success"] is True
-        assert result["username"] == "tahmid95"
-        assert result["name"] == "Tahmid Hossain"
+        assert result["username"] == "dev-user"
+        assert result["name"] == "Dev User"
 
 
 def test_lookup_user_by_email():
@@ -28,15 +28,15 @@ def test_lookup_user_by_email():
     search_mock.status_code = 200
     search_mock.json.return_value = {
         "total_count": 1,
-        "items": [{"login": "tahmid95"}]
+        "items": [{"login": "dev-user"}]
     }
 
     user_mock = MagicMock()
     user_mock.status_code = 200
     user_mock.json.return_value = {
-        "login": "tahmid95",
-        "name": "Tahmid Hossain",
-        "email": "tahmid95.hossain@gmail.com",
+        "login": "dev-user",
+        "name": "Dev User",
+        "email": "user@example.com",
         "avatar_url": "https://avatars.githubusercontent.com/u/12345",
     }
 
@@ -46,7 +46,7 @@ def test_lookup_user_by_email():
         return user_mock
 
     with patch("httpx.Client.get", side_effect=side_effect):
-        result = service.lookup_user_by_query("tahmid95.hossain@gmail.com")
+        result = service.lookup_user_by_query("user@example.com")
         assert result["success"] is True
-        assert result["username"] == "tahmid95"
-        assert result["name"] == "Tahmid Hossain"
+        assert result["username"] == "dev-user"
+        assert result["name"] == "Dev User"
