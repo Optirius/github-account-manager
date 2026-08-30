@@ -140,10 +140,21 @@ class AccountManager:
         except Exception:
             pass
 
-        # 3. Save and sync global git config
+        # 3. Save and sync global git config and full SSH alias mappings
         self.save_settings()
         self.sync_git()
-        repairs.append("Synchronized global ~/.gitconfig and ~/.ssh/config")
+        repairs.append("Synchronized global ~/.gitconfig and ~/.ssh/config with all host aliases")
+
+        # 4. Check mapped repositories and ensure remotes and aliases are aligned
+        try:
+            repos = self.app_service.scan_repositories(self.settings.folder_mappings)
+            for repo in repos:
+                if repo.get("needs_conversion"):
+                    repairs.append(f"Repository '{repo['name']}' uses HTTPS remote (can be converted to SSH via Apps tab)")
+                elif repo.get("is_ssh"):
+                    repairs.append(f"Repository '{repo['name']}' SSH remote verified ({repo['remote_url']})")
+        except Exception:
+            pass
 
         return len(repairs), repairs
 

@@ -85,4 +85,73 @@ def test_enable_git_credential_use_http_path():
         mock_run.return_value = MagicMock(returncode=0, stderr="")
         success, msg = service.enable_git_credential_use_http_path()
         assert success is True
-        assert "credential.useHttpPath" in msg
+        assert "credential.useHttpPath" in msg
+
+
+def test_dynamic_custom_editor_discovery_and_isolation(tmp_path):
+    """Test that any unlisted/custom editor (e.g. Antigravity, Trae, Positron) is dynamically detected and isolated."""
+    custom_editor_settings = tmp_path / "Antigravity IDE" / "User" / "settings.json"
+    custom_editor_settings.parent.mkdir(parents=True)
+    custom_editor_settings.write_text(json.dumps({"custom.setting": True}), encoding="utf-8")
+
+    from github_account_manager.platform.base import PlatformAdapter
+
+    class DynamicCustomPlatform(PlatformAdapter):
+        @property
+        def os_name(self) -> str:
+            return "windows"
+
+        def get_ide_settings_paths(self, ide_id: str):
+            return []
+
+        def detect_installed_apps(self):
+            return []
+
+        def list_git_credentials(self):
+            return []
+
+        def delete_git_credential(self, target: str):
+            return True
+
+        def get_default_ssh_dir(self):
+            return tmp_path / ".ssh"
+
+        def get_default_gitconfig_path(self):
+            return tmp_path / ".gitconfig"
+
+        def get_default_data_dir(self):
+            return tmp_path / ".data"
+
+        def get_system_font_family(self):
+            return "Segoe UI"
+
+        def discover_editor_configs(self):
+            return [{
+                "id": "antigravity_ide",
+                "name": "Antigravity IDE",
+                "settings_path": str(custom_editor_settings),
+                "icon": "⚡",
+            }]
+
+    service = AppIntegrationService(platform=DynamicCustomPlatform())
+    apps = service.detect_all_installed_apps()
+
+    antigravity_app = next((a for a in apps if a["id"] == "antigravity_ide"), None)
+    assert antigravity_app is not None
+    assert antigravity_app["name"] == "Antigravity IDE"
+    assert antigravity_app["supports_isolation"] is True
+    assert antigravity_app["is_isolated"] is False
+
+    # Apply 1-click isolation
+    success, msg = service.apply_isolation_to_app("antigravity_ide", str(custom_editor_settings))
+    assert success is True
+
+    # Verify settings file updated
+    data = json.loads(custom_editor_settings.read_text(encoding="utf-8"))
+    assert data["github.gitAuthentication"] is False
+    assert data["git.terminalAuthentication"] is False
+
+    # Re-detect and verify isolated
+    apps_updated = service.detect_all_installed_apps()
+    antigravity_updated = next(a for a in apps_updated if a["id"] == "antigravity_ide")
+    assert antigravity_updated["is_isolated"] is True

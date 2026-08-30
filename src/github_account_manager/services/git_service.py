@@ -160,7 +160,8 @@ class GitService:
     def sync_ssh_config(self, accounts: List[Account]) -> Path:
         """
         Generate ~/.ssh/config with per-account host aliases and port 443 fallback.
-        This provides bulletproof identity isolation for external IDEs like VS Code and Cursor.
+        Includes all common alias variations (e.g. github-professional, github-tahmid-selise,
+        github-professional-tahmid-selise) so existing repositories and IDEs never fail DNS lookup.
         """
         ssh_dir = self.home_dir / ".ssh"
         ssh_dir.mkdir(parents=True, exist_ok=True)
@@ -181,9 +182,21 @@ class GitService:
             if acc.ssh_key_path:
                 key_posix = Path(acc.ssh_key_path).as_posix()
                 slug = acc.slug
+
+                # Build comprehensive alias list for this account
+                aliases = [f"github-{slug}"]
+                clean_name = re.sub(r"[^a-zA-Z0-9_\-]", "-", acc.name.lower().strip()).strip("-")
+                if clean_name and f"github-{clean_name}" not in aliases:
+                    aliases.append(f"github-{clean_name}")
+                if acc.username:
+                    clean_user = re.sub(r"[^a-zA-Z0-9_\-]", "-", acc.username.lower().strip()).strip("-")
+                    if clean_user and f"github-{clean_user}" not in aliases:
+                        aliases.append(f"github-{clean_user}")
+
+                alias_line = " ".join(aliases)
                 lines.extend([
                     f"# Account Profile: {acc.name} ({acc.email})",
-                    f"Host github-{slug}",
+                    f"Host {alias_line}",
                     "    HostName ssh.github.com",
                     "    Port 443",
                     "    User git",

@@ -35,7 +35,38 @@ class LinuxPlatformAdapter(PlatformAdapter):
                 config_dir / "VSCodium" / "User" / "settings.json",
             ],
         }
-        return ide_map.get(ide_id.lower(), [])
+        if ide_id.lower() in ide_map:
+            return ide_map[ide_id.lower()]
+
+        clean_name = ide_id.replace("_", " ")
+        return [
+            config_dir / ide_id / "User" / "settings.json",
+            config_dir / clean_name / "User" / "settings.json",
+            config_dir / ide_id.capitalize() / "User" / "settings.json",
+        ]
+
+    def discover_editor_configs(self) -> List[Dict[str, Any]]:
+        """Dynamically find any editor/IDE configuration directories in ~/.config."""
+        configs = []
+        config_dir = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+        if config_dir.exists():
+            try:
+                for folder in config_dir.iterdir():
+                    if folder.is_dir() and not folder.name.startswith("."):
+                        settings_file = folder / "User" / "settings.json"
+                        if settings_file.exists():
+                            app_id = "vscode" if folder.name.lower() == "code" else folder.name.lower().replace(" ", "_")
+                            display_name = folder.name if folder.name != "Code" else "Visual Studio Code"
+                            icon = "💻" if "code" in folder.name.lower() or "antigravity" in folder.name.lower() else "⚡"
+                            configs.append({
+                                "id": app_id,
+                                "name": display_name,
+                                "settings_path": str(settings_file),
+                                "icon": icon,
+                            })
+            except (PermissionError, OSError):
+                pass
+        return configs
 
     def detect_installed_apps(self) -> List[Dict[str, Any]]:
         """

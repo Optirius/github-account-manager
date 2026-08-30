@@ -16,19 +16,50 @@ logger = logging.getLogger(__name__)
 
 
 class AppIntegrationService:
+    # Common massive build/dependency directories to ignore during repository scans to prevent memory/CPU thrashing
+    IGNORED_DIRS = {
+        "node_modules", ".venv", "venv", "env", ".env", "target", "build", "dist",
+        "bin", "obj", "__pycache__", ".git", ".idea", ".vscode", ".cargo", "vendor",
+        ".cache", ".npm", "coverage", ".pytest_cache", ".next", ".nuxt", "out",
+        "$recycle.bin", "system volume information", "appdata", "library", "temp", "tmp"
+    }
+
     def __init__(self, platform: Optional[PlatformAdapter] = None):
         self.platform = platform or get_platform_adapter()
 
     # --- Universal App Detection ---
 
+    @staticmethod
+    def _normalize_app_name(name: str) -> str:
+        n = name.lower().strip()
+        if "visual studio code" in n or n == "code":
+            return "visual studio code"
+        if "cursor" in n:
+            return "cursor"
+        if "windsurf" in n:
+            return "windsurf"
+        if "antigravity ide" in n:
+            return "antigravity ide"
+        elif "antigravity" in n:
+            return "antigravity"
+        if "vscodium" in n:
+            return "vscodium"
+        if "github desktop" in n:
+            return "github desktop"
+        if "git for windows" in n or n == "git":
+            return "git for windows"
+        if "visual studio" in n and "code" not in n:
+            return "microsoft visual studio"
+        return n
+
     def detect_all_installed_apps(self) -> List[Dict[str, Any]]:
         """
-        Automatically scan and detect all installed IDEs, Git GUI clients,
-        CLI tools, and Credential Managers on this operating system.
+        Dynamically scan and detect ANY installed code editors, IDEs, Git GUI clients,
+        CLI developer tools, and AI coding agents on this operating system.
         """
-        apps: List[Dict[str, Any]] = []
+        discovered: Dict[str, Dict[str, Any]] = {}
 
-        # 1. VS Code Family (VS Code, Cursor, Windsurf, VS Code Insiders, VSCodium)
+        # 1. Primary Well-Known Platform Lookup via get_ide_settings_paths
         vscode_variants = [
             ("vscode", "Visual Studio Code", "💻"),
             ("cursor", "Cursor AI Editor", "✨"),
@@ -43,10 +74,38 @@ class AppIntegrationService:
 
             if settings_p and (settings_p.parent.exists() or shutil.which(app_id) or shutil.which(app_id.replace("_", "-"))):
                 is_isolated, git_auth, term_auth = self._check_vscode_family_settings(settings_p)
-                apps.append({
+                norm_key = self._normalize_app_name(name)
+                discovered[norm_key] = {
                     "id": app_id,
                     "name": name,
                     "icon": icon,
+                    "category": "ide",
+                    "installed": True,
+                    "path": str(settings_p.parent.parent) if settings_p else "System Path",
+                    "settings_path": str(settings_p) if settings_p else None,
+                    "supports_isolation": True,
+                    "is_isolated": is_isolated,
+                    "git_auth_disabled": git_auth is False,
+                    "terminal_auth_disabled": term_auth is False,
+                    "status_badge": "Folder-Aware (Isolated ✓)" if is_isolated else "Account Interception Active ⚠️",
+                    "badge_variant": "active" if is_isolated else "warning",
+                    "description": f"Settings: {settings_p.name if settings_p else 'settings.json'}. Disabling built-in GitHub auth forces {name} to use folder-specific accounts and SSH keys.",
+                }
+
+        # 2. Dynamic Discovery of ALL other Installed Code Editors (Antigravity, Trae, Positron, etc.)
+        for dynamic_editor in self.platform.discover_editor_configs():
+            settings_p = Path(dynamic_editor["settings_path"])
+            if settings_p.exists():
+                name = dynamic_editor["name"]
+                norm_key = self._normalize_app_name(name)
+                if norm_key in discovered:
+                    continue
+                is_isolated, git_auth, term_auth = self._check_vscode_family_settings(settings_p)
+                app_id = dynamic_editor["id"]
+                discovered[norm_key] = {
+                    "id": app_id,
+                    "name": name,
+                    "icon": dynamic_editor.get("icon", "💻"),
                     "category": "ide",
                     "installed": True,
                     "path": str(settings_p.parent.parent),
@@ -57,28 +116,45 @@ class AppIntegrationService:
                     "terminal_auth_disabled": term_auth is False,
                     "status_badge": "Folder-Aware (Isolated ✓)" if is_isolated else "Account Interception Active ⚠️",
                     "badge_variant": "active" if is_isolated else "warning",
-                    "description": f"Settings: {settings_p.name}. Disabling built-in GitHub auth forces {name} to use folder-specific accounts and SSH keys.",
-                })
+                    "description": f"Settings: {settings_p.name}. Disabling built-in GitHub auth forces {name} to respect folder accounts and SSH keys.",
+                }
 
-        # 2. Add other detected platform apps (GitHub Desktop, Git CLI, etc.)
+        # 3. Add other dynamically detected platform apps (JetBrains IDEs, Visual Studio, Git GUI Clients, AI/CLI tools)
         for extra_app in self.platform.detect_installed_apps():
-            if not any(a["id"] == extra_app["id"] for a in apps):
-                apps.append({
-                    "id": extra_app["id"],
-                    "name": extra_app["name"],
-                    "icon": extra_app["icon"],
-                    "category": extra_app["category"],
-                    "installed": True,
-                    "path": extra_app.get("exe_path") or "System Path",
-                    "settings_path": None,
-                    "supports_isolation": extra_app.get("supports_isolation", False),
-                    "is_isolated": True,
-                    "status_badge": "Folder & SSH Compatible",
-                    "badge_variant": "active",
-                    "description": f"{extra_app['name']} respects repository .gitconfig and SSH remotes (git@github.com).",
-                })
+            norm_key = self._normalize_app_name(extra_app["name"])
+            if norm_key in discovered:
+                existing = discovered[norm_key]
+                if (not existing.get("path") or existing.get("path") == "System Path") and extra_app.get("exe_path") and extra_app.get("exe_path") != "System Path":
+                    existing["path"] = extra_app["exe_path"]
+                continue
 
-        return apps
+            app_id = extra_app["id"]
+            settings_cand = None
+            if extra_app.get("supports_isolation"):
+                cand_paths = self.platform.get_ide_settings_paths(app_id)
+                settings_cand = next((p for p in cand_paths if p.exists()), None)
+
+            is_isolated = True
+            if settings_cand:
+                is_iso, _, _ = self._check_vscode_family_settings(settings_cand)
+                is_isolated = is_iso
+
+            discovered[norm_key] = {
+                "id": app_id,
+                "name": extra_app["name"],
+                "icon": extra_app["icon"],
+                "category": extra_app["category"],
+                "installed": True,
+                "path": extra_app.get("exe_path") or "System Path",
+                "settings_path": str(settings_cand) if settings_cand else None,
+                "supports_isolation": extra_app.get("supports_isolation", False) or (settings_cand is not None),
+                "is_isolated": is_isolated,
+                "status_badge": "Folder & SSH Compatible" if is_isolated else "Account Interception Active ⚠️",
+                "badge_variant": "active" if is_isolated else "warning",
+                "description": f"{extra_app['name']} integrates with Git and respects repository .gitconfig and SSH remotes (git@github.com).",
+            }
+
+        return list(discovered.values())
 
     def _check_vscode_family_settings(self, settings_file: Path) -> Tuple[bool, Optional[bool], Optional[bool]]:
         """Check if an editor's settings.json has github.gitAuthentication disabled."""
@@ -86,6 +162,8 @@ class AppIntegrationService:
             return False, None, None
 
         try:
+            if settings_file.stat().st_size > 100_000:
+                return False, None, None
             content = settings_file.read_text(encoding="utf-8")
             data = json.loads(content)
             git_auth = data.get("github.gitAuthentication")
@@ -97,21 +175,32 @@ class AppIntegrationService:
             logger.debug(f"Could not parse {settings_file}: {e}")
             return False, None, None
 
-    # --- IDE Isolation Handlers (VS Code, Cursor, Windsurf, etc.) ---
+    # --- IDE Isolation Handlers (VS Code, Cursor, Windsurf, Antigravity, Trae, etc.) ---
 
-    def apply_isolation_to_app(self, app_id: str) -> Tuple[bool, str]:
-        """Apply folder isolation settings to a specific IDE (VS Code, Cursor, etc.)."""
-        cand_paths = self.platform.get_ide_settings_paths(app_id)
-        if not cand_paths:
+    def apply_isolation_to_app(self, app_id: str, settings_path_override: Optional[str] = None) -> Tuple[bool, str]:
+        """Apply folder isolation settings to ANY discovered IDE or editor (VS Code, Cursor, Antigravity, Trae, etc.)."""
+        settings_path = None
+        if settings_path_override:
+            p = Path(settings_path_override)
+            if p.parent.exists():
+                settings_path = p
+
+        if not settings_path:
+            cand_paths = self.platform.get_ide_settings_paths(app_id)
+            if cand_paths:
+                settings_path = next((p for p in cand_paths if p.parent.exists()), cand_paths[0])
+
+        if not settings_path:
             return False, f"Configuration path for '{app_id}' not found on {self.platform.os_name}."
-
-        settings_path = next((p for p in cand_paths if p.parent.exists()), cand_paths[0])
 
         try:
             settings_path.parent.mkdir(parents=True, exist_ok=True)
             data = {}
             if settings_path.exists():
-                shutil.copy2(settings_path, settings_path.with_suffix(".json.bak"))
+                try:
+                    shutil.copy2(settings_path, settings_path.with_suffix(".json.bak"))
+                except Exception:
+                    pass
                 try:
                     content = settings_path.read_text(encoding="utf-8")
                     data = json.loads(content)
@@ -127,14 +216,14 @@ class AppIntegrationService:
             return False, f"Failed to configure {app_id}: {e}"
 
     def apply_isolation_to_all_ides(self) -> Tuple[int, List[str]]:
-        """Apply folder isolation to all installed VS Code family IDEs on this device."""
+        """Apply folder isolation to ALL detected IDEs and editors on this device."""
         apps = self.detect_all_installed_apps()
         configured = 0
         messages = []
 
         for app in apps:
             if app.get("supports_isolation") and app.get("installed"):
-                success, msg = self.apply_isolation_to_app(app["id"])
+                success, msg = self.apply_isolation_to_app(app["id"], app.get("settings_path"))
                 if success:
                     configured += 1
                     messages.append(f"✓ {app['name']}: Configured")
@@ -143,10 +232,18 @@ class AppIntegrationService:
 
         return configured, messages
 
-    def restore_defaults_for_app(self, app_id: str) -> Tuple[bool, str]:
-        """Restore default Git authentication behavior for a specific IDE."""
-        cand_paths = self.platform.get_ide_settings_paths(app_id)
-        settings_path = next((p for p in cand_paths if p.exists()), None)
+    def restore_defaults_for_app(self, app_id: str, settings_path_override: Optional[str] = None) -> Tuple[bool, str]:
+        """Restore default Git authentication behavior for ANY discovered IDE or editor."""
+        settings_path = None
+        if settings_path_override:
+            p = Path(settings_path_override)
+            if p.exists():
+                settings_path = p
+
+        if not settings_path:
+            cand_paths = self.platform.get_ide_settings_paths(app_id)
+            settings_path = next((p for p in cand_paths if p.exists()), None)
+
         if not settings_path:
             return False, "Settings file not found."
 
@@ -226,14 +323,25 @@ class AppIntegrationService:
 
     # --- Repository Remote Scanner & HTTPS -> SSH Protocol Converter ---
 
-    def scan_repositories(self, folder_mappings: List[FolderMapping]) -> List[Dict[str, Any]]:
+    def scan_repositories(
+        self,
+        folder_mappings: List[FolderMapping],
+        max_repos: int = 100,
+        max_items_per_folder: int = 250,
+    ) -> List[Dict[str, Any]]:
         """
-        Scan all mapped workspace directories for git repositories,
-        checking their remote protocol (HTTPS vs SSH) and account alignment.
+        Scan all mapped workspace directories for git repositories with memory safeguards:
+        - Skips heavy dependency and build directories (node_modules, .venv, target, dist, etc.)
+        - Direct in-memory reading of .git/config (zero subprocess spawning)
+        - Depth-bounded search (max depth 2)
+        - Hard limits on items scanned per folder and total repositories
         """
         repos: List[Dict[str, Any]] = []
 
         for mapping in folder_mappings:
+            if len(repos) >= max_repos:
+                break
+
             root = Path(mapping.folder_path)
             if not root.exists():
                 continue
@@ -241,19 +349,39 @@ class AppIntegrationService:
             # Check if root itself is a repo
             if (root / ".git").exists():
                 self._inspect_and_add_repo(root, mapping, repos)
+                if len(repos) >= max_repos:
+                    break
 
-            # Scan child directories (up to depth 2)
+            # Scan child directories (up to depth 2) with safe bounds
             try:
+                scanned_count = 0
                 for child in root.iterdir():
-                    if child.is_dir() and (child / ".git").exists():
-                        self._inspect_and_add_repo(child, mapping, repos)
-                    elif child.is_dir() and not child.name.startswith("."):
-                        try:
-                            for grandchild in child.iterdir():
-                                if grandchild.is_dir() and (grandchild / ".git").exists():
-                                    self._inspect_and_add_repo(grandchild, mapping, repos)
-                        except (PermissionError, OSError):
-                            pass
+                    scanned_count += 1
+                    if scanned_count > max_items_per_folder or len(repos) >= max_repos:
+                        break
+
+                    child_name_l = child.name.lower()
+                    if child.name.startswith(".") or child_name_l in self.IGNORED_DIRS:
+                        continue
+
+                    if child.is_dir():
+                        if (child / ".git").exists():
+                            self._inspect_and_add_repo(child, mapping, repos)
+                        else:
+                            # Grandchild scan (depth 2)
+                            try:
+                                sub_scanned = 0
+                                for grandchild in child.iterdir():
+                                    sub_scanned += 1
+                                    if sub_scanned > 50 or len(repos) >= max_repos:
+                                        break
+                                    gc_name_l = grandchild.name.lower()
+                                    if grandchild.name.startswith(".") or gc_name_l in self.IGNORED_DIRS:
+                                        continue
+                                    if grandchild.is_dir() and (grandchild / ".git").exists():
+                                        self._inspect_and_add_repo(grandchild, mapping, repos)
+                            except (PermissionError, OSError):
+                                pass
             except (PermissionError, OSError) as e:
                 logger.debug(f"Permission error scanning {root}: {e}")
 
@@ -289,36 +417,53 @@ class AppIntegrationService:
         })
 
     def _get_repo_remote_url(self, repo_path: Path) -> Optional[str]:
-        """Query git remote get-url origin for a repository."""
+        """Query origin remote URL for a repository with fast in-memory file parsing first."""
+        # 1. Fast in-memory parsing of .git/config (zero subprocess spawning)
+        git_target = repo_path / ".git"
+        git_config = None
+        if git_target.is_dir():
+            git_config = git_target / "config"
+        elif git_target.is_file():
+            # Submodule or worktree pointing to gitdir: ...
+            try:
+                line = git_target.read_text(encoding="utf-8", errors="ignore").strip()
+                if line.startswith("gitdir:"):
+                    gitdir_path = (repo_path / line.split("gitdir:", 1)[1].strip()).resolve()
+                    git_config = gitdir_path / "config"
+            except Exception:
+                pass
+
+        if git_config and git_config.exists():
+            try:
+                # Memory guard: skip if config is unusually massive (> 50KB)
+                if git_config.stat().st_size < 50_000:
+                    content = git_config.read_text(encoding="utf-8", errors="ignore")
+                    m = re.search(r'\[remote\s+"origin"\][^\[]*url\s*=\s*(.+)', content, re.MULTILINE)
+                    if m:
+                        return m.group(1).strip()
+            except Exception:
+                pass
+
+        # 2. Fallback: query git subprocess if direct file read was inconclusive
         try:
             res = safe_subprocess_run(
                 ["git", "-C", str(repo_path), "remote", "get-url", "origin"],
                 capture_output=True,
                 text=True,
-                timeout=4,
+                timeout=3,
             )
             if res.returncode == 0 and res.stdout.strip():
                 return res.stdout.strip()
         except Exception:
             pass
 
-        # Fallback: parse .git/config directly
-        git_config = repo_path / ".git" / "config"
-        if git_config.exists():
-            try:
-                content = git_config.read_text(encoding="utf-8", errors="ignore")
-                m = re.search(r'\[remote\s+"origin"\][^\[]*url\s*=\s*(.+)', content, re.MULTILINE)
-                if m:
-                    return m.group(1).strip()
-            except Exception:
-                pass
         return None
 
     def _parse_owner_repo(self, url: str) -> Optional[str]:
-        """Extract 'owner/repo' from GitHub HTTPS or SSH URL."""
+        """Extract 'owner/repo' from GitHub HTTPS, standard SSH, or custom alias SSH URLs."""
         if not url:
             return ""
-        m = re.search(r"github(?:\-[a-zA-Z0-9_\-]+)?\.com?[:/]([a-zA-Z0-9_\-]+/[a-zA-Z0-9_\.\-]+)", url)
+        m = re.search(r"(?:https?://|git@|ssh://git@)[^:/]+[:/]([a-zA-Z0-9_\-]+/[a-zA-Z0-9_\.\-]+)", url)
         if m:
             clean = m.group(1)
             if clean.endswith(".git"):

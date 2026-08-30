@@ -89,6 +89,41 @@ class AppsView(ctk.CTkFrame):
         self.refresh()
 
     def refresh(self):
+        # 1. Clean previous content and render prominent in-page loader card
+        for widget in self.scroll.winfo_children():
+            widget.destroy()
+
+        loading_card = ctk.CTkFrame(self.scroll, fg_color=BG_CARD, corner_radius=10, border_width=1, border_color=BORDER_COLOR)
+        loading_card.pack(fill="x", pady=(20, 20), padx=5)
+
+        loader_top = ctk.CTkFrame(loading_card, fg_color="transparent")
+        loader_top.pack(fill="x", padx=20, pady=(20, 8))
+
+        ctk.CTkLabel(
+            loader_top,
+            text="🔍  Scanning System & Integrations...",
+            font=FONT_SUBHEADING,
+            text_color=TEXT_PRIMARY,
+        ).pack(side="left")
+
+        ctk.CTkLabel(
+            loading_card,
+            text="Checking installed IDEs (Visual Studio, Rider, VS Code, Cursor), Git clients, credentials, and repositories. Memory-guarded background scan in progress.",
+            font=FONT_SMALL,
+            text_color=TEXT_SECONDARY,
+            justify="left",
+            wraplength=680,
+        ).pack(anchor="w", padx=20, pady=(0, 16))
+
+        progress_bar = ctk.CTkProgressBar(
+            loading_card,
+            mode="indeterminate",
+            height=8,
+            progress_color=ACCENT_BLUE,
+        )
+        progress_bar.pack(fill="x", padx=20, pady=(0, 22))
+        progress_bar.start()
+
         def task():
             apps = self.manager.app_service.detect_all_installed_apps()
             creds = self.manager.app_service.list_windows_git_credentials()
@@ -97,6 +132,11 @@ class AppsView(ctk.CTkFrame):
             return apps, creds, repos, ide_accounts
 
         def on_done(data):
+            try:
+                progress_bar.stop()
+            except Exception:
+                pass
+
             apps, creds, repos, ide_accounts = data
             for widget in self.scroll.winfo_children():
                 widget.destroy()
@@ -118,10 +158,23 @@ class AppsView(ctk.CTkFrame):
             self._render_credentials_section(creds)
             self._render_repo_converter_section(repos)
 
+        def on_error(exc):
+            try:
+                progress_bar.stop()
+            except Exception:
+                pass
+            for widget in self.scroll.winfo_children():
+                widget.destroy()
+            err_card = ctk.CTkFrame(self.scroll, fg_color=BG_CARD, corner_radius=10, border_width=1, border_color=BORDER_COLOR)
+            err_card.pack(fill="x", pady=(20, 20), padx=5)
+            ctk.CTkLabel(err_card, text="⚠️ Scan Failed", font=FONT_SUBHEADING, text_color=ACCENT_RED).pack(anchor="w", padx=20, pady=(15, 6))
+            ctk.CTkLabel(err_card, text=str(exc), font=FONT_SMALL, text_color=TEXT_SECONDARY).pack(anchor="w", padx=20, pady=(0, 15))
+
         run_async(
             self,
             task_fn=task,
             on_success=on_done,
+            on_error=on_error,
             loading_btn=self.refresh_btn,
             loading_text="⏳ Scanning...",
             error_title="App Scan Error",
@@ -266,7 +319,7 @@ class AppsView(ctk.CTkFrame):
                     hover_color=ACCENT_GREEN_HOVER,
                     text_color="#ffffff",
                 )
-                iso_btn.configure(command=lambda i=app["id"], b=iso_btn: self._apply_app_isolation(i, b))
+                iso_btn.configure(command=lambda i=app["id"], sp=app.get("settings_path"), b=iso_btn: self._apply_app_isolation(i, sp, b))
                 iso_btn.pack(side="left", padx=(0, 8))
             else:
                 rst_btn = ctk.CTkButton(
@@ -280,12 +333,12 @@ class AppsView(ctk.CTkFrame):
                     border_width=1,
                     border_color=BORDER_COLOR,
                 )
-                rst_btn.configure(command=lambda i=app["id"], b=rst_btn: self._restore_app_defaults(i, b))
+                rst_btn.configure(command=lambda i=app["id"], sp=app.get("settings_path"), b=rst_btn: self._restore_app_defaults(i, sp, b))
                 rst_btn.pack(side="left")
 
-    def _apply_app_isolation(self, app_id: str, btn: Optional[ctk.CTkButton] = None):
+    def _apply_app_isolation(self, app_id: str, settings_path: Optional[str] = None, btn: Optional[ctk.CTkButton] = None):
         def task():
-            return self.manager.app_service.apply_isolation_to_app(app_id)
+            return self.manager.app_service.apply_isolation_to_app(app_id, settings_path)
 
         def on_done(res):
             success, msg = res
@@ -322,9 +375,9 @@ class AppsView(ctk.CTkFrame):
             error_title="IDE Bulk Isolation Error",
         )
 
-    def _restore_app_defaults(self, app_id: str, btn: Optional[ctk.CTkButton] = None):
+    def _restore_app_defaults(self, app_id: str, settings_path: Optional[str] = None, btn: Optional[ctk.CTkButton] = None):
         def task():
-            return self.manager.app_service.restore_defaults_for_app(app_id)
+            return self.manager.app_service.restore_defaults_for_app(app_id, settings_path)
 
         def on_done(res):
             success, msg = res

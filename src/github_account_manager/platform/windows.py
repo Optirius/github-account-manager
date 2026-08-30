@@ -17,6 +17,73 @@ from github_account_manager.utils import safe_subprocess_run
 logger = logging.getLogger(__name__)
 
 
+def _find_visual_studio_exes(prog_files: str, prog_files_x86: str) -> List[Path]:
+    """Fast, shallow check for Visual Studio devenv.exe without unbounded recursive globs."""
+    exes = []
+    for base_dir in [Path(prog_files) / "Microsoft Visual Studio", Path(prog_files_x86) / "Microsoft Visual Studio"]:
+        if base_dir.exists():
+            try:
+                for year in base_dir.iterdir():
+                    if year.is_dir():
+                        try:
+                            for edition in year.iterdir():
+                                if edition.is_dir():
+                                    cand = edition / "Common7" / "IDE" / "devenv.exe"
+                                    if cand.exists():
+                                        exes.append(cand)
+                        except (PermissionError, OSError):
+                            pass
+            except (PermissionError, OSError):
+                pass
+    return exes
+
+
+def _find_jetbrains_exes(prog_files: str, local_appdata: str, app_subname: str, exe_name: str) -> List[Path]:
+    """Fast, shallow check for JetBrains IDE executables without traversing entire hard drive."""
+    exes = []
+    # 1. Program Files
+    jb_dir = Path(prog_files) / "JetBrains"
+    if jb_dir.exists():
+        try:
+            for d in jb_dir.iterdir():
+                if d.is_dir() and app_subname in d.name.lower():
+                    for cand in [d / "bin" / f"{exe_name}64.exe", d / "bin" / f"{exe_name}.exe"]:
+                        if cand.exists():
+                            exes.append(cand)
+        except (PermissionError, OSError):
+            pass
+
+    # 2. Local Programs
+    prog_dir = Path(local_appdata) / "Programs"
+    if prog_dir.exists():
+        try:
+            for d in prog_dir.iterdir():
+                if d.is_dir() and app_subname in d.name.lower():
+                    for cand in [d / "bin" / f"{exe_name}64.exe", d / f"{exe_name}.exe"]:
+                        if cand.exists():
+                            exes.append(cand)
+        except (PermissionError, OSError):
+            pass
+
+    # 3. JetBrains Toolbox
+    tb_apps = Path(local_appdata) / "JetBrains" / "Toolbox" / "apps"
+    if tb_apps.exists():
+        try:
+            for tool in tb_apps.iterdir():
+                if tool.is_dir() and app_subname in tool.name.lower():
+                    for ch in tool.iterdir():
+                        if ch.is_dir():
+                            for ver in ch.iterdir():
+                                if ver.is_dir():
+                                    cand = ver / "bin" / f"{exe_name}64.exe"
+                                    if cand.exists():
+                                        exes.append(cand)
+        except (PermissionError, OSError):
+            pass
+
+    return exes
+
+
 class WindowsPlatformAdapter(PlatformAdapter):
     @property
     def os_name(self) -> str:
@@ -41,12 +108,48 @@ class WindowsPlatformAdapter(PlatformAdapter):
                 appdata_path / "VSCodium" / "User" / "settings.json",
             ],
         }
-        return ide_map.get(ide_id.lower(), [])
+        if ide_id.lower() in ide_map:
+            return ide_map[ide_id.lower()]
+
+        # Dynamic fallback: check any folder matching the ID in AppData
+        clean_name = ide_id.replace("_", " ")
+        return [
+            appdata_path / ide_id / "User" / "settings.json",
+            appdata_path / clean_name / "User" / "settings.json",
+            appdata_path / ide_id.capitalize() / "User" / "settings.json",
+        ]
+
+    def discover_editor_configs(self) -> List[Dict[str, Any]]:
+        """Dynamically find any editor/IDE configuration directories in %APPDATA%."""
+        configs = []
+        appdata = os.environ.get("APPDATA")
+        appdata_path = Path(appdata) if appdata else Path.home() / "AppData" / "Roaming"
+
+        if appdata_path.exists():
+            try:
+                for folder in appdata_path.iterdir():
+                    if folder.is_dir() and not folder.name.startswith("."):
+                        settings_file = folder / "User" / "settings.json"
+                        if settings_file.exists():
+                            app_id = "vscode" if folder.name.lower() == "code" else folder.name.lower().replace(" ", "_")
+                            display_name = folder.name if folder.name != "Code" else "Visual Studio Code"
+                            icon = "💻" if "code" in folder.name.lower() or "antigravity" in folder.name.lower() else "⚡"
+                            configs.append({
+                                "id": app_id,
+                                "name": display_name,
+                                "settings_path": str(settings_file),
+                                "icon": icon,
+                            })
+            except (PermissionError, OSError):
+                pass
+
+        return configs
 
     def detect_installed_apps(self) -> List[Dict[str, Any]]:
         """
         Dynamically discover installed IDEs, Git GUI clients, and developer tools
         via the Windows Registry, JetBrains directories, AppData, and system paths.
+        Optimized to use bounded shallow scans and minimal memory.
         """
         local_appdata = os.environ.get("LOCALAPPDATA", "")
         prog_files = os.environ.get("ProgramFiles", "C:\\Program Files")
@@ -55,7 +158,7 @@ class WindowsPlatformAdapter(PlatformAdapter):
 
         discovered: Dict[str, Dict[str, Any]] = {}
 
-        # 1. Primary Well-Known Definitions
+        # 1. Primary Well-Known Definitions with bounded/shallow lookups
         known_definitions = [
             {
                 "id": "vscode",
@@ -73,10 +176,7 @@ class WindowsPlatformAdapter(PlatformAdapter):
                 "name": "Microsoft Visual Studio",
                 "category": "IDE / Editor",
                 "icon": "🟣",
-                "exe_candidates": (
-                    list(Path(prog_files).glob("Microsoft Visual Studio/**/devenv.exe"))
-                    + list(Path(prog_files_x86).glob("Microsoft Visual Studio/**/devenv.exe"))
-                ),
+                "exe_candidates": _find_visual_studio_exes(prog_files, prog_files_x86),
                 "supports_isolation": True,
             },
             {
@@ -84,11 +184,7 @@ class WindowsPlatformAdapter(PlatformAdapter):
                 "name": "JetBrains Rider",
                 "category": "IDE / Editor",
                 "icon": "🔴",
-                "exe_candidates": (
-                    list(Path(local_appdata).glob("Programs/**/rider*.exe"))
-                    + list(Path(prog_files).glob("JetBrains/**/rider*.exe"))
-                    + list(Path(local_appdata).glob("JetBrains/Toolbox/apps/**/rider*.exe"))
-                ),
+                "exe_candidates": _find_jetbrains_exes(prog_files, local_appdata, "rider", "rider"),
                 "supports_isolation": True,
             },
             {
@@ -96,11 +192,7 @@ class WindowsPlatformAdapter(PlatformAdapter):
                 "name": "JetBrains IntelliJ IDEA",
                 "category": "IDE / Editor",
                 "icon": "💡",
-                "exe_candidates": (
-                    list(Path(local_appdata).glob("Programs/**/idea*.exe"))
-                    + list(Path(prog_files).glob("JetBrains/**/idea*.exe"))
-                    + list(Path(local_appdata).glob("JetBrains/Toolbox/apps/**/idea*.exe"))
-                ),
+                "exe_candidates": _find_jetbrains_exes(prog_files, local_appdata, "idea", "idea"),
                 "supports_isolation": True,
             },
             {
@@ -108,11 +200,7 @@ class WindowsPlatformAdapter(PlatformAdapter):
                 "name": "JetBrains PyCharm",
                 "category": "IDE / Editor",
                 "icon": "🐍",
-                "exe_candidates": (
-                    list(Path(local_appdata).glob("Programs/**/pycharm*.exe"))
-                    + list(Path(prog_files).glob("JetBrains/**/pycharm*.exe"))
-                    + list(Path(local_appdata).glob("JetBrains/Toolbox/apps/**/pycharm*.exe"))
-                ),
+                "exe_candidates": _find_jetbrains_exes(prog_files, local_appdata, "pycharm", "pycharm"),
                 "supports_isolation": True,
             },
             {
@@ -163,7 +251,11 @@ class WindowsPlatformAdapter(PlatformAdapter):
                 "name": "GitKraken",
                 "category": "Git GUI Client",
                 "icon": "🐙",
-                "exe_candidates": list(Path(local_appdata).glob("gitkraken/**/gitkraken.exe")),
+                "exe_candidates": [
+                    Path(local_appdata) / "gitkraken" / "gitkraken.exe",
+                    Path(local_appdata) / "gitkraken" / "app" / "gitkraken.exe",
+                    Path(prog_files) / "GitKraken" / "gitkraken.exe",
+                ],
                 "supports_isolation": False,
             },
             {
@@ -222,24 +314,40 @@ class WindowsPlatformAdapter(PlatformAdapter):
                     "supports_isolation": defn["supports_isolation"],
                 }
 
-        # 2. Dynamic Registry Scanner (Discovers all installed development apps)
+        # 2. Dynamic Registry Scanner (Discovers installed development apps with memory-safe iteration)
         if winreg is not None:
             reg_keys = [
                 (winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Uninstall"),
                 (winreg.HKEY_LOCAL_MACHINE, r"Software\Microsoft\Windows\CurrentVersion\Uninstall"),
                 (winreg.HKEY_LOCAL_MACHINE, r"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"),
             ]
-            keywords = ["git", "github", "visual studio", "rider", "intellij", "pycharm", "webstorm", "clion", "goland", "rustrover", "code", "cursor", "windsurf", "eclipse", "sublime merge", "sourcetree", "gitkraken", "vscodium", "fleet", "positron"]
-            ignore = ["pack", "sdk", "runtime", "diagnostic", "wmi", "setup", "helper", "intellisense", "toolset", "coveragemsi", "fonts", "logitech", "protocolhandler", "installer"]
+            keywords = [
+                "git", "github", "visual studio", "rider", "intellij", "pycharm", "webstorm",
+                "clion", "goland", "rustrover", "datagrip", "rubymine", "phpstorm", "code",
+                "cursor", "windsurf", "eclipse", "sublime merge", "sourcetree", "gitkraken",
+                "vscodium", "fleet", "positron", "antigravity", "trae", "fork", "tower",
+                "smartgit", "gitextensions", "tortoisegit", "lazygit", "claude code", "aider",
+                "copilot", "devin"
+            ]
+            ignore = [
+                "pack", "sdk", "runtime", "diagnostic", "wmi", "setup", "helper", "intellisense",
+                "toolset", "coveragemsi", "fonts", "logitech", "protocolhandler", "installer",
+                "tools for visual studio", "redistributable", "component", "extension",
+                "prerequisites", "targeting pack", "language pack", "analyzer", "build tools"
+            ]
 
             for root_h, subkey in reg_keys:
                 try:
                     with winreg.OpenKey(root_h, subkey) as key:
-                        for i in range(winreg.QueryInfoKey(key)[0]):
+                        num_subkeys, _, _ = winreg.QueryInfoKey(key)
+                        for i in range(min(num_subkeys, 500)):  # Bounded to 500 keys max per root
                             try:
                                 sub_name = winreg.EnumKey(key, i)
                                 with winreg.OpenKey(key, sub_name) as app_key:
-                                    name, _ = winreg.QueryValueEx(app_key, "DisplayName")
+                                    try:
+                                        name, _ = winreg.QueryValueEx(app_key, "DisplayName")
+                                    except Exception:
+                                        continue
                                     name_l = name.lower()
                                     if any(k in name_l for k in keywords) and not any(ign in name_l for ign in ignore):
                                         loc = ""
@@ -255,21 +363,24 @@ class WindowsPlatformAdapter(PlatformAdapter):
                                                 pass
                                         app_id = re.sub(r"[^a-zA-Z0-9_]", "_", name.lower()).strip("_")
                                         if not any(d["name"].lower() == name.lower() for d in discovered.values()):
-                                            is_git_gui = any(g in name_l for g in ["git", "github", "kraken", "sourcetree", "merge"])
+                                            is_git_gui = any(g in name_l for g in ["gitkraken", "sourcetree", "sublime merge", "fork", "tower", "smartgit", "gitextensions", "tortoisegit", "lazygit", "github desktop"])
+                                            is_cli_tool = any(c in name_l for c in ["claude code", "aider", "copilot", "git for windows"]) or name_l == "git"
+                                            category = "Git GUI Client" if is_git_gui else ("CLI / AI Agent" if is_cli_tool else "IDE / Editor")
+                                            icon = "🐙" if is_git_gui else ("🤖" if is_cli_tool else ("💻" if "code" in name_l or "antigravity" in name_l else "⚡"))
                                             discovered[app_id] = {
                                                 "id": app_id,
                                                 "name": name,
-                                                "category": "Git GUI Client" if is_git_gui else "IDE / Editor",
-                                                "icon": "🐙" if is_git_gui else "💻",
+                                                "category": category,
+                                                "icon": icon,
                                                 "exe_path": loc or "System Path",
-                                                "supports_isolation": "code" in name_l or "cursor" in name_l or "windsurf" in name_l,
+                                                "supports_isolation": "code" in name_l or "cursor" in name_l or "windsurf" in name_l or "antigravity" in name_l or "trae" in name_l,
                                             }
                             except Exception:
                                 pass
                 except Exception:
                     pass
 
-        # 3. Dynamic JetBrains Directory Scanner
+        # 3. Dynamic JetBrains Directory Scanner (Bounded shallow scan)
         jetbrains_roots = [
             Path(appdata) / "JetBrains",
             Path(local_appdata) / "JetBrains" / "Toolbox" / "apps",
@@ -277,45 +388,57 @@ class WindowsPlatformAdapter(PlatformAdapter):
         ]
         for jb_root in jetbrains_roots:
             if jb_root.exists():
-                for folder in jb_root.glob("*"):
-                    if folder.is_dir() and not folder.name.startswith("."):
-                        clean_name = re.sub(r"[0-9\.\-_]+$", "", folder.name).strip()
-                        if clean_name:
-                            app_id = f"jetbrains_{clean_name.lower()}"
-                            if app_id not in discovered and not any(clean_name.lower() in d["name"].lower() for d in discovered.values()):
-                                discovered[app_id] = {
-                                    "id": app_id,
-                                    "name": f"JetBrains {clean_name.capitalize()}",
-                                    "category": "IDE / Editor",
-                                    "icon": "🔴" if "rider" in clean_name.lower() else "💡",
-                                    "exe_path": str(folder),
-                                    "supports_isolation": True,
-                                }
+                try:
+                    for folder in jb_root.iterdir():
+                        if folder.is_dir() and not folder.name.startswith("."):
+                            clean_name = re.sub(r"[0-9\.\-_]+$", "", folder.name).strip()
+                            if clean_name:
+                                app_id = f"jetbrains_{clean_name.lower()}"
+                                if app_id not in discovered and not any(clean_name.lower() in d["name"].lower() for d in discovered.values()):
+                                    discovered[app_id] = {
+                                        "id": app_id,
+                                        "name": f"JetBrains {clean_name.capitalize()}",
+                                        "category": "IDE / Editor",
+                                        "icon": "🔴" if "rider" in clean_name.lower() else "💡",
+                                        "exe_path": str(folder),
+                                        "supports_isolation": True,
+                                    }
+                except (PermissionError, OSError):
+                    pass
 
         return list(discovered.values())
 
     def get_ide_github_accounts(self) -> List[Dict[str, Any]]:
-        """Extract GitHub accounts configured inside external IDEs (such as JetBrains Rider / IntelliJ / PyCharm)."""
+        """Extract GitHub accounts configured inside external IDEs with memory guards."""
         accounts: List[Dict[str, Any]] = []
         appdata = os.environ.get("APPDATA", "")
         jetbrains_dir = Path(appdata) / "JetBrains"
         if jetbrains_dir.exists():
-            for xml_file in jetbrains_dir.glob("*/options/github.xml"):
-                try:
-                    ide_name = xml_file.parent.parent.name
-                    content = xml_file.read_text(encoding="utf-8", errors="ignore")
-                    for match in re.finditer(r'<account\s+[^>]*name="([^"]+)"', content):
-                        acc_name = match.group(1)
-                        server_m = re.search(r'<server\s+[^>]*host="([^"]+)"', content)
-                        server = server_m.group(1) if server_m else "github.com"
-                        accounts.append({
-                            "ide": ide_name,
-                            "account": acc_name,
-                            "server": server,
-                            "source": f"JetBrains ({ide_name})",
-                        })
-                except Exception:
-                    pass
+            try:
+                for folder in jetbrains_dir.iterdir():
+                    if folder.is_dir():
+                        xml_file = folder / "options" / "github.xml"
+                        if xml_file.exists():
+                            try:
+                                # Memory check: Skip if file is unusually large (> 200KB)
+                                if xml_file.stat().st_size > 200_000:
+                                    continue
+                                ide_name = folder.name
+                                content = xml_file.read_text(encoding="utf-8", errors="ignore")
+                                for match in re.finditer(r'<account\s+[^>]*name="([^"]+)"', content):
+                                    acc_name = match.group(1)
+                                    server_m = re.search(r'<server\s+[^>]*host="([^"]+)"', content)
+                                    server = server_m.group(1) if server_m else "github.com"
+                                    accounts.append({
+                                        "ide": ide_name,
+                                        "account": acc_name,
+                                        "server": server,
+                                        "source": f"JetBrains ({ide_name})",
+                                    })
+                            except Exception:
+                                pass
+            except (PermissionError, OSError):
+                pass
         return accounts
 
     def list_git_credentials(self) -> List[Dict[str, Any]]:

@@ -56,3 +56,7 @@ class PlatformAdapter(ABC):
     def get_ide_github_accounts(self) -> List[Dict[str, Any]]:
         """Extract GitHub accounts configured inside external IDEs (such as JetBrains Rider / IntelliJ)."""
         return []
+
+    def discover_editor_configs(self) -> List[Dict[str, Any]]:
+        """Dynamically discover any installed code editor / IDE configuration directories containing settings.json."""
+        return []

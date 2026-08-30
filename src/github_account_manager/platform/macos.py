@@ -35,7 +35,38 @@ class MacOSPlatformAdapter(PlatformAdapter):
                 app_support / "VSCodium" / "User" / "settings.json",
             ],
         }
-        return ide_map.get(ide_id.lower(), [])
+        if ide_id.lower() in ide_map:
+            return ide_map[ide_id.lower()]
+
+        clean_name = ide_id.replace("_", " ")
+        return [
+            app_support / ide_id / "User" / "settings.json",
+            app_support / clean_name / "User" / "settings.json",
+            app_support / ide_id.capitalize() / "User" / "settings.json",
+        ]
+
+    def discover_editor_configs(self) -> List[Dict[str, Any]]:
+        """Dynamically find any editor/IDE configuration directories in ~/Library/Application Support."""
+        configs = []
+        app_support = Path.home() / "Library" / "Application Support"
+        if app_support.exists():
+            try:
+                for folder in app_support.iterdir():
+                    if folder.is_dir() and not folder.name.startswith("."):
+                        settings_file = folder / "User" / "settings.json"
+                        if settings_file.exists():
+                            app_id = "vscode" if folder.name.lower() == "code" else folder.name.lower().replace(" ", "_")
+                            display_name = folder.name if folder.name != "Code" else "Visual Studio Code"
+                            icon = "💻" if "code" in folder.name.lower() or "antigravity" in folder.name.lower() else "⚡"
+                            configs.append({
+                                "id": app_id,
+                                "name": display_name,
+                                "settings_path": str(settings_file),
+                                "icon": icon,
+                            })
+            except (PermissionError, OSError):
+                pass
+        return configs
 
     def detect_installed_apps(self) -> List[Dict[str, Any]]:
         """
