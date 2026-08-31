@@ -296,7 +296,10 @@ class UpdateService:
                     dest = (temp_dir / member.name).resolve()
                     if not str(dest).startswith(str(temp_dir.resolve())):
                         raise SecurityError(f"Malicious archive member attempted path traversal: {member.name}")
-                t.extractall(temp_dir)
+                if hasattr(tarfile, "data_filter"):
+                    t.extractall(temp_dir, filter="data")
+                else:
+                    t.extractall(temp_dir)
 
             for item in temp_dir.iterdir():
                 if item.is_file() and "github-account-manager" in item.name.lower():

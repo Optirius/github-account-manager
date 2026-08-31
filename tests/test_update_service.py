@@ -116,12 +116,55 @@ def test_download_and_extract_asset(tmp_path):
         def progress(p, m):
             progress_calls.append((p, m))
 
-        extracted = service.download_and_extract_asset(update_info, progress_callback=progress)
+        with patch.object(service, "get_target_platform", return_value="windows"):
+            extracted = service.download_and_extract_asset(update_info, progress_callback=progress)
 
         assert extracted.exists()
         assert extracted.name == "github-account-manager.exe"
         assert extracted.read_bytes() == dummy_exe_content
         assert len(progress_calls) > 0
+
+
+def test_download_and_extract_linux_asset(tmp_path):
+    import tarfile
+    service = UpdateService()
+
+    # Create mock tar.gz asset with dummy ELF executable (>100KB with \x7fELF header)
+    mock_tar = tmp_path / "github-account-manager-linux-x64.tar.gz"
+    dummy_elf_content = b"\x7fELF" + (b"\x00" * 150_000)
+
+    dummy_bin_path = tmp_path / "github-account-manager"
+    dummy_bin_path.write_bytes(dummy_elf_content)
+
+    with tarfile.open(mock_tar, "w:gz") as t:
+        t.add(dummy_bin_path, arcname="github-account-manager")
+
+    update_info = UpdateInfo(
+        current_version="v0.1.20",
+        latest_version="v0.1.21",
+        is_update_available=True,
+        release_name="Release v0.1.21",
+        release_notes="New Linux release",
+        html_url="https://github.com/Optirius/github-multi-account-manager",
+        published_at="2026-08-30",
+        asset_name="github-account-manager-linux-x64.tar.gz",
+        asset_download_url="https://github.com/Optirius/github-multi-account-manager/releases/download/v0.1.21/github-account-manager-linux-x64.tar.gz",
+        asset_size=len(mock_tar.read_bytes()),
+    )
+
+    with patch("urllib.request.urlopen") as mock_urlopen:
+        mock_resp = MagicMock()
+        mock_resp.headers = {"Content-Length": str(len(mock_tar.read_bytes()))}
+        mock_resp.read.side_effect = [mock_tar.read_bytes(), b""]
+        mock_resp.__enter__.return_value = mock_resp
+        mock_urlopen.return_value = mock_resp
+
+        with patch.object(service, "get_target_platform", return_value="linux"):
+            extracted = service.download_and_extract_asset(update_info)
+
+        assert extracted.exists()
+        assert extracted.name == "github-account-manager"
+        assert extracted.read_bytes() == dummy_elf_content
 
 
 def test_is_secure_download_url():

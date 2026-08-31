@@ -25,6 +25,7 @@ from github_account_manager.ui.theme import (
     FONT_HEADING,
     FONT_MONO_SMALL,
     FONT_SMALL,
+    FONT_SMALL_BOLD,
     FONT_SUBHEADING,
     TEXT_MUTED,
     TEXT_PRIMARY,
