@@ -4,12 +4,13 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from github_account_manager.config import CONFIG_FILE, DEFAULT_GITCONFIG, DEFAULT_SSH_DIR
+from github_account_manager.config import APP_VERSION, CONFIG_FILE, DEFAULT_GITCONFIG, DEFAULT_SSH_DIR
 from github_account_manager.models import Account, AppSettings, FolderMapping, SSHKeyInfo
 from github_account_manager.services.app_integration_service import AppIntegrationService
 from github_account_manager.services.git_service import GitService
 from github_account_manager.services.github_service import GitHubService
 from github_account_manager.services.ssh_service import SSHService
+from github_account_manager.services.update_service import UpdateInfo, UpdateService
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ class AccountManager:
         self.ssh_service = SSHService(ssh_dir or DEFAULT_SSH_DIR)
         self.github_service = GitHubService()
         self.app_service = AppIntegrationService()
+        self.update_service = UpdateService(current_version=APP_VERSION)
         self.settings = self.load_settings()
 
         # Run auto-repair to link matching SSH keys, resolve slug collisions, and sync git config

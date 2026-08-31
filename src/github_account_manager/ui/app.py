@@ -1,10 +1,14 @@
-"""Main Application window with modular view switching, lazy view loading, and custom notifications."""
 from typing import Dict, Optional
+import threading
 import customtkinter as ctk
 
 from github_account_manager.config import APP_NAME, APP_VERSION
 from github_account_manager.services.manager import AccountManager
+from github_account_manager.services.update_service import UpdateInfo
+from github_account_manager.ui.components.update_dialog import UpdateDialog
 from github_account_manager.ui.theme import (
+    ACCENT_GREEN,
+    ACCENT_GREEN_HOVER,
     BG_APP,
     BG_CARD,
     BG_CARD_HOVER,
@@ -12,6 +16,7 @@ from github_account_manager.ui.theme import (
     BORDER_COLOR,
     FONT_BODY_BOLD,
     FONT_SMALL,
+    FONT_SMALL_BOLD,
     FONT_TITLE,
     TEXT_MUTED,
     TEXT_PRIMARY,
@@ -30,6 +35,7 @@ class App(ctk.CTk):
     def __init__(self, manager: Optional[AccountManager] = None):
         super().__init__()
         self.manager = manager or AccountManager()
+        self.latest_update_info: Optional[UpdateInfo] = None
 
         # Set appearance mode before widget creation
         ctk.set_appearance_mode(self.manager.settings.theme)
@@ -46,6 +52,9 @@ class App(ctk.CTk):
 
         self._build_layout()
         self.show_view("accounts")
+
+        # Background update check after app is rendered
+        self.after(1500, self._check_updates_background)
 
         # Force window to foreground
         self.lift()
@@ -143,6 +152,34 @@ class App(ctk.CTk):
         self.toast_container.pack(fill="x", padx=25, pady=(8, 0))
         self.toast_container.pack_propagate(False)
 
+        # Update Available Banner (hidden by default)
+        self.update_banner = ctk.CTkFrame(
+            self.toast_container,
+            fg_color=("#e6ffed", "#1b4729"),
+            border_width=1,
+            border_color=("#2da44e", "#3fb950"),
+            corner_radius=6,
+        )
+        self.update_banner_lbl = ctk.CTkLabel(
+            self.update_banner,
+            text="",
+            font=FONT_BODY_BOLD,
+            text_color=("#1a7f37", "#7ee787"),
+        )
+        self.update_banner_lbl.pack(side="left", padx=16, pady=6)
+
+        self.update_banner_btn = ctk.CTkButton(
+            self.update_banner,
+            text="⚡ Update Now",
+            font=FONT_SMALL_BOLD,
+            height=28,
+            fg_color=ACCENT_GREEN,
+            hover_color=ACCENT_GREEN_HOVER,
+            text_color="#ffffff",
+            command=lambda: self.open_update_dialog(self.latest_update_info),
+        )
+        self.update_banner_btn.pack(side="right", padx=10, pady=6)
+
         # Notification Toast Bar
         self.toast_bar = ctk.CTkFrame(
             self.toast_container,
@@ -192,6 +229,7 @@ class App(ctk.CTk):
                 self.manager,
                 on_theme_change=self._handle_theme_change,
                 on_notify=self.notify,
+                on_open_update=self.open_update_dialog,
             )
 
         if view is not None:
@@ -268,6 +306,84 @@ class App(ctk.CTk):
             self._update_footer()
         except Exception:
             pass
+
+    def _check_updates_background(self):
+        """Perform a quiet update check in the background."""
+        if not getattr(self.manager.settings, "check_updates_on_startup", True):
+            return
+
+        def task():
+            try:
+                info = self.manager.update_service.check_for_updates()
+                if info and info.is_update_available:
+                    self.latest_update_info = info
+                    self.after(0, lambda: self._show_update_banner(info))
+            except Exception:
+                pass
+
+        t = threading.Thread(target=task, daemon=True)
+        t.start()
+
+    def _show_update_banner(self, info: UpdateInfo):
+        """Display non-intrusive update banner at the top of the content area."""
+        try:
+            self.update_banner_lbl.configure(
+                text=f"🎉  New Version {info.latest_version} Available! (Current: {info.current_version})"
+            )
+            self.update_banner.pack(fill="both", expand=True)
+        except Exception:
+            pass
+
+    def open_update_dialog(self, info: Optional[UpdateInfo] = None):
+        """Open the interactive update dialog, or focus existing instance without locking views."""
+        if hasattr(self, "_active_update_dialog") and self._active_update_dialog is not None:
+            try:
+                if self._active_update_dialog.winfo_exists():
+                    self._active_update_dialog.lift()
+                    self._active_update_dialog.focus_force()
+                    return
+            except Exception:
+                self._active_update_dialog = None
+
+        target_info = info or self.latest_update_info
+        if target_info and target_info.is_update_available:
+            self._active_update_dialog = UpdateDialog(
+                self,
+                self.manager.update_service,
+                target_info,
+                on_notify=self.notify,
+                on_close=lambda: setattr(self, "_active_update_dialog", None),
+            )
+        else:
+            # Check immediately
+            def task():
+                return self.manager.update_service.check_for_updates()
+
+            def on_done(fetched_info: Optional[UpdateInfo]):
+                if fetched_info is None:
+                    self.notify("Update Check", "Could not check for updates (offline or rate limit).", is_error=True)
+                elif fetched_info.is_update_available:
+                    self.latest_update_info = fetched_info
+                    self._show_update_banner(fetched_info)
+                    if not (hasattr(self, "_active_update_dialog") and self._active_update_dialog and self._active_update_dialog.winfo_exists()):
+                        self._active_update_dialog = UpdateDialog(
+                            self,
+                            self.manager.update_service,
+                            fetched_info,
+                            on_notify=self.notify,
+                            on_close=lambda: setattr(self, "_active_update_dialog", None),
+                        )
+                    else:
+                        self._active_update_dialog.lift()
+                        self._active_update_dialog.focus_force()
+                else:
+                    self.notify("Up to Date", f"You are running the latest version ({fetched_info.current_version}).")
+
+            def worker():
+                res = task()
+                self.after(0, lambda: on_done(res))
+
+            threading.Thread(target=worker, daemon=True).start()
 
     def report_callback_exception(self, exc, val, tb):
         """Catch all Tkinter callback exceptions to log them and prevent silent window closure."""

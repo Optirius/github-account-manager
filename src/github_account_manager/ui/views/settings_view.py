@@ -4,12 +4,16 @@ import shutil
 from typing import Callable, Optional
 import customtkinter as ctk
 
-from github_account_manager.config import BACKUP_DIR, DEFAULT_GITCONFIG
+from github_account_manager.config import APP_VERSION, BACKUP_DIR, DEFAULT_GITCONFIG
 from github_account_manager.services.manager import AccountManager
+from github_account_manager.services.update_service import UpdateInfo
+from github_account_manager.ui.async_runner import run_async
 from github_account_manager.ui.components.info_banner import InfoBanner
 from github_account_manager.ui.theme import (
     ACCENT_BLUE,
     ACCENT_BLUE_HOVER,
+    ACCENT_GREEN,
+    ACCENT_GREEN_HOVER,
     BG_CARD,
     BG_INSET,
     BORDER_COLOR,
@@ -29,11 +33,20 @@ from github_account_manager.ui.theme import (
 
 
 class SettingsView(ctk.CTkFrame):
-    def __init__(self, master, manager: AccountManager, on_theme_change: Callable[[str], None], on_notify: Callable[[str, str], None], **kwargs):
+    def __init__(
+        self,
+        master,
+        manager: AccountManager,
+        on_theme_change: Callable[[str], None],
+        on_notify: Callable[[str, str], None],
+        on_open_update: Optional[Callable[[UpdateInfo], None]] = None,
+        **kwargs,
+    ):
         super().__init__(master, fg_color="transparent", **kwargs)
         self.manager = manager
         self.on_theme_change = on_theme_change
         self.on_notify = on_notify
+        self.on_open_update = on_open_update
 
         self._build_ui()
 
@@ -104,6 +117,72 @@ class SettingsView(ctk.CTkFrame):
         else:
             self.sync_switch.deselect()
         self.sync_switch.pack(side="left")
+
+        # Software Updates & Releases Card
+        update_card = ctk.CTkFrame(scroll, fg_color=BG_CARD, corner_radius=8, border_width=1, border_color=BORDER_COLOR)
+        update_card.pack(fill="x", pady=(0, 15))
+
+        up_head = ctk.CTkFrame(update_card, fg_color="transparent")
+        up_head.pack(fill="x", padx=16, pady=(14, 4))
+        ctk.CTkLabel(up_head, text="Software Updates & Releases", font=FONT_SUBHEADING, text_color=TEXT_PRIMARY).pack(side="left")
+
+        # Startup check switch
+        startup_row = ctk.CTkFrame(update_card, fg_color="transparent")
+        startup_row.pack(fill="x", padx=16, pady=(6, 8))
+        ctk.CTkLabel(startup_row, text="Startup Auto-Check:", font=FONT_BODY_BOLD, text_color=TEXT_PRIMARY, width=170, anchor="w").pack(side="left")
+        self.startup_check_switch = ctk.CTkSwitch(
+            startup_row,
+            text="Check for latest version on application startup",
+            font=FONT_BODY,
+            command=self._on_startup_check_toggled,
+        )
+        if getattr(self.manager.settings, "check_updates_on_startup", True):
+            self.startup_check_switch.select()
+        else:
+            self.startup_check_switch.deselect()
+        self.startup_check_switch.pack(side="left")
+
+        # Current version & Manual check row
+        ver_row = ctk.CTkFrame(update_card, fg_color="transparent")
+        ver_row.pack(fill="x", padx=16, pady=(4, 14))
+
+        self.ver_status_lbl = ctk.CTkLabel(
+            ver_row,
+            text=f"Installed Version: v{APP_VERSION}",
+            font=FONT_BODY,
+            text_color=TEXT_SECONDARY,
+        )
+        self.ver_status_lbl.pack(side="left")
+
+        self.btn_box = ctk.CTkFrame(ver_row, fg_color="transparent")
+        self.btn_box.pack(side="right")
+
+        self.install_update_btn = ctk.CTkButton(
+            self.btn_box,
+            text="⚡ View & Install",
+            width=135,
+            height=30,
+            font=FONT_SMALL_BOLD,
+            fg_color=ACCENT_GREEN,
+            hover_color=ACCENT_GREEN_HOVER,
+            text_color="#ffffff",
+            command=self._install_detected_update,
+        )
+
+        self.check_update_btn = ctk.CTkButton(
+            self.btn_box,
+            text="🔄 Check for Updates",
+            width=160,
+            height=30,
+            font=FONT_SMALL_BOLD,
+            fg_color=BTN_SECONDARY_BG,
+            hover_color=BTN_SECONDARY_HOVER,
+            text_color=BTN_SECONDARY_TEXT,
+            border_width=1,
+            border_color=BORDER_COLOR,
+            command=self._check_for_updates_action,
+        )
+        self.check_update_btn.pack(side="right")
 
         # Global Gitconfig Live View
         git_card = ctk.CTkFrame(scroll, fg_color=BG_CARD, corner_radius=8, border_width=1, border_color=BORDER_COLOR)
@@ -207,3 +286,49 @@ class SettingsView(ctk.CTkFrame):
             self.on_notify("Restored", f"Restored {DEFAULT_GITCONFIG.name} from backup {backup_file.name}")
         except Exception as e:
             self.on_notify("Error", f"Failed to restore backup: {e}")
+
+    def _on_startup_check_toggled(self):
+        self.manager.settings.check_updates_on_startup = bool(self.startup_check_switch.get())
+        self.manager.save_settings()
+
+    def _install_detected_update(self):
+        if hasattr(self, "_cached_update_info") and self._cached_update_info and self.on_open_update:
+            self.on_open_update(self._cached_update_info)
+        else:
+            self._check_for_updates_action()
+
+    def _check_for_updates_action(self):
+        def task():
+            return self.manager.update_service.check_for_updates()
+
+        def on_done(info: Optional[UpdateInfo]):
+            if info is None:
+                self.on_notify("Update Check", "Could not reach GitHub Releases (check internet connection).", is_error=True)
+                return
+
+            if info.is_update_available:
+                self._cached_update_info = info
+                self.ver_status_lbl.configure(
+                    text=f"Installed: v{APP_VERSION}  ➔  New Version {info.latest_version} Available!",
+                    text_color=ACCENT_GREEN,
+                )
+                self.install_update_btn.pack(side="left", padx=(0, 8))
+                if self.on_open_update:
+                    self.on_open_update(info)
+            else:
+                self._cached_update_info = None
+                self.install_update_btn.pack_forget()
+                self.ver_status_lbl.configure(
+                    text=f"Installed Version: v{APP_VERSION} (Up to date ✓)",
+                    text_color=TEXT_SECONDARY,
+                )
+                self.on_notify("Up to Date", f"You are running the latest version ({info.current_version}).")
+
+        run_async(
+            self,
+            task_fn=task,
+            on_success=on_done,
+            loading_btn=self.check_update_btn,
+            loading_text="⏳ Checking...",
+            error_title="Update Check Error",
+        )

@@ -95,3 +95,4 @@ class AppSettings(BaseModel):
     folder_mappings: List[FolderMapping] = Field(default_factory=list)
     theme: str = "dark"
     auto_sync_gitconfig: bool = True
+    check_updates_on_startup: bool = True
