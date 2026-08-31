@@ -31,12 +31,6 @@ class AccountManager:
         self.update_service = UpdateService(current_version=APP_VERSION)
         self.settings = self.load_settings()
 
-        # Run auto-repair to link matching SSH keys, resolve slug collisions, and sync git config
-        if not self.settings.accounts:
-            self._auto_discover_existing_setup()
-        else:
-            self.auto_repair_and_sync()
-
     def load_settings(self) -> AppSettings:
         """Load settings from JSON config file or return default."""
         if self.config_file.exists():
@@ -62,41 +56,13 @@ class AccountManager:
 
     def sync_git(self) -> bool:
         """Synchronize git configuration files and includeIf statements."""
+        # Only sync if there are actual configured accounts or mappings
+        if not self.settings.accounts and not self.settings.folder_mappings:
+            return False
         return self.git_service.sync_global_gitconfig(
             self.settings.accounts,
             self.settings.folder_mappings,
         )
-
-    def _auto_discover_existing_setup(self) -> None:
-        """Import existing .gitconfig and SSH keys on first launch."""
-        ssh_keys = self.ssh_service.list_keys()
-
-        personal_key = next((k for k in ssh_keys if "personal" in k.name.lower()), None)
-        prof_key = next((k for k in ssh_keys if "prof" in k.name.lower() or "work" in k.name.lower()), None)
-
-        created_accounts = []
-
-        if personal_key:
-            acc = Account(
-                name="Personal",
-                email="personal@example.com",
-                git_name="Personal Developer",
-                ssh_key_path=personal_key.private_key_path,
-            )
-            created_accounts.append(acc)
-
-        if prof_key:
-            acc = Account(
-                name="Work",
-                email="work@example.com",
-                git_name="Work Developer",
-                ssh_key_path=prof_key.private_key_path,
-            )
-            created_accounts.append(acc)
-
-        if created_accounts:
-            self.settings.accounts = created_accounts
-            self.save_settings()
 
     def auto_repair_and_sync(self) -> Tuple[int, List[str]]:
         """
@@ -105,7 +71,7 @@ class AccountManager:
         Returns: (repairs_count, list_of_repair_messages)
         """
         repairs: List[str] = []
-        home = Path.home()
+        home = self.git_service.home_dir
         ssh_keys = self.ssh_service.list_keys()
 
         # 1. Auto-bind missing SSH keys for accounts if matching key exists in ~/.ssh
