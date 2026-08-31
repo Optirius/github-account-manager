@@ -51,8 +51,22 @@ def resolve_version() -> str:
     return "0.1.0"
 
 
+def write_embedded_version(version: str):
+    """Bake resolved version into source code and assets so standalone binaries always report the exact version."""
+    ver_py = Path("src/github_account_manager/_version.py")
+    ver_py.parent.mkdir(parents=True, exist_ok=True)
+    ver_py.write_text(f'"""Build-time embedded application version."""\n__version__ = "{version}"\n', encoding="utf-8")
+
+    Path("version.txt").write_text(f"{version}\n", encoding="utf-8")
+    assets_dir = Path("assets")
+    if assets_dir.exists():
+        (assets_dir / "version.txt").write_text(f"{version}\n", encoding="utf-8")
+    print(f"[VERSION] Embedded application version: v{version}")
+
+
 def run_pyinstaller(target_os: str):
     version = resolve_version()
+    write_embedded_version(version)
     print(f"[BUILD] Packaging Single Standalone Executable for {target_os.upper()} (Version: v{version})...")
 
     ctk_path = Path(customtkinter.__file__).parent
