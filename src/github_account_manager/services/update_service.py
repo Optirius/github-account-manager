@@ -275,6 +275,8 @@ class UpdateService:
         extracted_binary: Optional[Path] = None
         target_os = self.get_target_platform()
 
+        archive_extensions = {".zip", ".gz", ".tar", ".tgz", ".bz2", ".xz"}
+
         if download_path.suffix.lower() == ".zip":
             with zipfile.ZipFile(download_path, "r") as z:
                 # Path traversal check
@@ -284,9 +286,9 @@ class UpdateService:
                         raise SecurityError(f"Malicious archive member attempted path traversal: {member}")
                 z.extractall(temp_dir)
 
-            for item in temp_dir.iterdir():
-                if item.is_file() and item.suffix.lower() in [".exe", ""]:
-                    if "github-account-manager" in item.name.lower() or item.name.endswith(".exe"):
+            for item in temp_dir.rglob("*"):
+                if item != download_path and item.is_file() and item.suffix.lower() not in archive_extensions:
+                    if "github-account-manager" in item.name.lower() or item.suffix.lower() == ".exe":
                         extracted_binary = item
                         break
 
@@ -301,18 +303,20 @@ class UpdateService:
                 else:
                     t.extractall(temp_dir)
 
-            for item in temp_dir.iterdir():
-                if item.is_file() and "github-account-manager" in item.name.lower():
-                    extracted_binary = item
-                    break
+            for item in temp_dir.rglob("*"):
+                if item != download_path and item.is_file() and item.suffix.lower() not in archive_extensions:
+                    if "github-account-manager" in item.name.lower():
+                        extracted_binary = item
+                        break
 
         elif download_path.suffix.lower() == ".exe":
             extracted_binary = download_path
 
         if not extracted_binary or not extracted_binary.exists():
             for item in temp_dir.rglob("*.exe"):
-                extracted_binary = item
-                break
+                if item != download_path:
+                    extracted_binary = item
+                    break
 
         if not extracted_binary or not extracted_binary.exists():
             raise FileNotFoundError("Could not locate executable inside update package.")

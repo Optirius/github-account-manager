@@ -167,6 +167,44 @@ def test_download_and_extract_linux_asset(tmp_path):
         assert extracted.read_bytes() == dummy_elf_content
 
 
+def test_download_and_extract_macos_asset(tmp_path):
+    service = UpdateService()
+
+    # Create mock zip asset with dummy Mach-O 64-bit executable (>100KB with \xfe\xed\xfa\xcf header)
+    mock_zip = tmp_path / "github-account-manager-macos.zip"
+    dummy_macho_content = b"\xfe\xed\xfa\xcf" + (b"\x00" * 150_000)
+
+    with zipfile.ZipFile(mock_zip, "w") as z:
+        z.writestr("github-account-manager", dummy_macho_content)
+
+    update_info = UpdateInfo(
+        current_version="v0.1.20",
+        latest_version="v0.1.21",
+        is_update_available=True,
+        release_name="Release v0.1.21",
+        release_notes="New macOS release",
+        html_url="https://github.com/Optirius/github-multi-account-manager",
+        published_at="2026-08-30",
+        asset_name="github-account-manager-macos.zip",
+        asset_download_url="https://github.com/Optirius/github-multi-account-manager/releases/download/v0.1.21/github-account-manager-macos.zip",
+        asset_size=len(mock_zip.read_bytes()),
+    )
+
+    with patch("urllib.request.urlopen") as mock_urlopen:
+        mock_resp = MagicMock()
+        mock_resp.headers = {"Content-Length": str(len(mock_zip.read_bytes()))}
+        mock_resp.read.side_effect = [mock_zip.read_bytes(), b""]
+        mock_resp.__enter__.return_value = mock_resp
+        mock_urlopen.return_value = mock_resp
+
+        with patch.object(service, "get_target_platform", return_value="macos"):
+            extracted = service.download_and_extract_asset(update_info)
+
+        assert extracted.exists()
+        assert extracted.name == "github-account-manager"
+        assert extracted.read_bytes() == dummy_macho_content
+
+
 def test_is_secure_download_url():
     from github_account_manager.services.update_service import is_secure_download_url
 
