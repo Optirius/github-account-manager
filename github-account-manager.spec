@@ -4,7 +4,7 @@ import customtkinter
 from PyInstaller.utils.hooks import collect_all
 
 ctk_path = str(Path(customtkinter.__file__).parent)
-datas = [(ctk_path, 'customtkinter')]
+datas = [(ctk_path, 'customtkinter'), ('assets', 'assets')]
 binaries = []
 hiddenimports = ['github_account_manager', 'github_account_manager.platform.windows', 'github_account_manager.platform.macos', 'github_account_manager.platform.linux']
 tmp_ret = collect_all('customtkinter')
@@ -47,4 +47,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=['assets/icon.ico'] if Path('assets/icon.ico').exists() else None,
 )

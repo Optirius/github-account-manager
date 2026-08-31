@@ -1,8 +1,10 @@
 from typing import Dict, Optional
+import sys
 import threading
 import customtkinter as ctk
+from PIL import Image
 
-from github_account_manager.config import APP_NAME, APP_VERSION
+from github_account_manager.config import APP_NAME, APP_VERSION, ASSETS_DIR
 from github_account_manager.services.manager import AccountManager
 from github_account_manager.services.update_service import UpdateInfo
 from github_account_manager.ui.components.update_dialog import UpdateDialog
@@ -47,6 +49,14 @@ class App(ctk.CTk):
         self.minsize(960, 620)
         self.configure(fg_color=BG_APP)
 
+        # Set window icon if available
+        icon_path = ASSETS_DIR / "icon.ico"
+        if icon_path.exists() and sys.platform == "win32":
+            try:
+                self.iconbitmap(str(icon_path))
+            except Exception:
+                pass
+
         self._toast_timer_id = None
         self._view_cache: Dict[str, ctk.CTkFrame] = {}
 
@@ -61,6 +71,23 @@ class App(ctk.CTk):
         self.attributes("-topmost", True)
         self.after_idle(lambda: self.attributes("-topmost", False))
         self.focus_force()
+
+    def _build_text_logo(self, logo_box):
+        title_lbl = ctk.CTkLabel(
+            logo_box,
+            text="🐙 GitHub",
+            font=FONT_TITLE,
+            text_color=TEXT_PRIMARY,
+        )
+        title_lbl.pack(anchor="w")
+
+        sub_lbl = ctk.CTkLabel(
+            logo_box,
+            text="Multi-Account Manager",
+            font=FONT_SMALL,
+            text_color=TEXT_MUTED,
+        )
+        sub_lbl.pack(anchor="w")
 
     def _build_layout(self):
         # Master grid layout
@@ -81,23 +108,28 @@ class App(ctk.CTk):
 
         # Logo / Title
         logo_box = ctk.CTkFrame(self.sidebar, fg_color="transparent")
-        logo_box.pack(fill="x", padx=18, pady=(22, 16))
+        logo_box.pack(fill="x", padx=16, pady=(18, 14))
 
-        title_lbl = ctk.CTkLabel(
-            logo_box,
-            text="🐙 GitHub",
-            font=FONT_TITLE,
-            text_color=TEXT_PRIMARY,
-        )
-        title_lbl.pack(anchor="w")
+        navbar_dark = ASSETS_DIR / "navbar-logo-dark.png"
+        navbar_light = ASSETS_DIR / "navbar-logo-light.png"
 
-        sub_lbl = ctk.CTkLabel(
-            logo_box,
-            text="Multi-Account Manager",
-            font=FONT_SMALL,
-            text_color=TEXT_MUTED,
-        )
-        sub_lbl.pack(anchor="w")
+        if navbar_dark.exists() and navbar_light.exists():
+            try:
+                self._logo_img = ctk.CTkImage(
+                    light_image=Image.open(navbar_light),
+                    dark_image=Image.open(navbar_dark),
+                    size=(185, 48),
+                )
+                logo_lbl = ctk.CTkLabel(
+                    logo_box,
+                    text="",
+                    image=self._logo_img,
+                )
+                logo_lbl.pack(anchor="w")
+            except Exception:
+                self._build_text_logo(logo_box)
+        else:
+            self._build_text_logo(logo_box)
 
         # Nav Buttons
         nav_box = ctk.CTkFrame(self.sidebar, fg_color="transparent")

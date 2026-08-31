@@ -45,5 +45,15 @@ DEFAULT_SSH_DIR.mkdir(parents=True, exist_ok=True)
 
 DEFAULT_GITCONFIG = Path.home() / ".gitconfig"
 
+
+def _resolve_assets_dir() -> Path:
+    import sys
+    if hasattr(sys, "_MEIPASS"):
+        return Path(sys._MEIPASS) / "assets"
+    return Path(__file__).resolve().parent.parent.parent / "assets"
+
+
+ASSETS_DIR = _resolve_assets_dir()
+
 # GitHub endpoints
 GITHUB_API_BASE = "https://api.github.com"
