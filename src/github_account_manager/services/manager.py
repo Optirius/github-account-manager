@@ -267,3 +267,47 @@ class AccountManager:
         if updated_any or deleted:
             self.save_settings()
         return deleted
+
+    def get_account_for_ssh_key(self, ssh_key_path: str) -> Optional[Account]:
+        """Find the account profile configured with this SSH key."""
+        target_name = Path(ssh_key_path).name.lower()
+        for acc in self.settings.accounts:
+            if acc.ssh_key_path:
+                if acc.ssh_key_path == ssh_key_path or Path(acc.ssh_key_path).name.lower() == target_name:
+                    return acc
+        return None
+
+    def link_ssh_key_to_account(self, ssh_key_path: str, account_id: Optional[str]) -> Tuple[bool, str]:
+        """
+        Link an SSH key to an account profile or unlink if account_id is None.
+        Automatically saves settings and synchronizes git/SSH configuration.
+        """
+        target_name = Path(ssh_key_path).name.lower()
+
+        # If account_id is None, unlink this key from any account using it
+        if not account_id:
+            unlinked_names = []
+            for acc in self.settings.accounts:
+                if acc.ssh_key_path and (acc.ssh_key_path == ssh_key_path or Path(acc.ssh_key_path).name.lower() == target_name):
+                    acc.ssh_key_path = None
+                    unlinked_names.append(acc.name)
+
+            self.save_settings()
+            if unlinked_names:
+                return True, f"Unlinked SSH key from {', '.join(unlinked_names)}."
+            return True, "SSH key is unlinked."
+
+        # Target account
+        target_acc = next((a for a in self.settings.accounts if a.id == account_id), None)
+        if not target_acc:
+            return False, f"Account with ID '{account_id}' not found."
+
+        # Unlink this key from any other accounts to avoid collisions
+        for acc in self.settings.accounts:
+            if acc.id != account_id and acc.ssh_key_path and (acc.ssh_key_path == ssh_key_path or Path(acc.ssh_key_path).name.lower() == target_name):
+                acc.ssh_key_path = None
+
+        # Assign to target account
+        target_acc.ssh_key_path = ssh_key_path
+        self.save_settings()
+        return True, f"Linked SSH key '{Path(ssh_key_path).name}' to profile '{target_acc.name}'."

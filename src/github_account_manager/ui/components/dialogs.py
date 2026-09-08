@@ -348,15 +348,31 @@ class NewSSHKeyDialog(BaseDialog):
         parent,
         default_email: str = "",
         default_name: str = "",
+        available_accounts: Optional[List[Account]] = None,
         on_generate: Optional[Callable[[dict], Tuple[bool, str]]] = None,
     ):
-        super().__init__(parent, "Generate New SSH Key", 560, 540)
+        super().__init__(parent, "Generate New SSH Key", 560, 610)
         self.on_generate = on_generate
+        self.available_accounts = available_accounts or []
 
         container = ctk.CTkFrame(self, fg_color="transparent")
         container.pack(fill="both", expand=True, padx=25, pady=25)
 
         ctk.CTkLabel(container, text="Generate SSH Key Pair", font=FONT_HEADING, text_color=TEXT_PRIMARY).pack(anchor="w", pady=(0, 12))
+
+        # Optional Account Linking
+        if self.available_accounts:
+            ctk.CTkLabel(container, text="Link to Account Profile (Optional):", font=FONT_BODY_BOLD, text_color=TEXT_PRIMARY).pack(anchor="w", pady=(5, 3))
+            self.account_options = ["None (Do not link)"] + [f"{acc.name} ({acc.email})" for acc in self.available_accounts]
+            self.account_combo = ctk.CTkComboBox(
+                container,
+                values=self.account_options,
+                height=36,
+                font=FONT_BODY,
+                command=self._on_account_select,
+            )
+            self.account_combo.pack(fill="x", pady=(0, 10))
+            self.account_combo.set("None (Do not link)")
 
         # Key Name
         ctk.CTkLabel(container, text="Key Filename (saved in ~/.ssh/):", font=FONT_BODY_BOLD, text_color=TEXT_PRIMARY).pack(anchor="w", pady=(5, 3))
@@ -424,6 +440,19 @@ class NewSSHKeyDialog(BaseDialog):
         )
         self.gen_btn.pack(side="right")
 
+    def _on_account_select(self, choice: str):
+        if choice == "None (Do not link)":
+            return
+        selected = next((a for a in self.available_accounts if f"{a.name} ({a.email})" == choice), None)
+        if selected:
+            if not self.email_entry.get() or self.email_entry.get() == "user@example.com":
+                self.email_entry.delete(0, "end")
+                self.email_entry.insert(0, selected.email)
+            current_name = self.key_name_entry.get().strip()
+            if not current_name or current_name == "id_ed25519_custom":
+                self.key_name_entry.delete(0, "end")
+                self.key_name_entry.insert(0, f"id_ed25519_{selected.name.lower()}")
+
     def _handle_generate(self):
         name = self.key_name_entry.get().strip()
         email = self.email_entry.get().strip()
@@ -434,12 +463,20 @@ class NewSSHKeyDialog(BaseDialog):
             self.status_lbl.configure(text="Please provide a key name.", text_color=ACCENT_RED)
             return
 
+        target_account_id = None
+        if hasattr(self, "account_combo") and self.account_combo.get() != "None (Do not link)":
+            choice = self.account_combo.get()
+            target_acc = next((a for a in self.available_accounts if f"{a.name} ({a.email})" == choice), None)
+            if target_acc:
+                target_account_id = target_acc.id
+
         key_type = "ed25519" if "ED25519" in algo_choice else "rsa"
         data = {
             "name": name,
             "email": email,
             "key_type": key_type,
             "passphrase": passphrase,
+            "target_account_id": target_account_id,
         }
 
         self.status_lbl.configure(text="Generating key pair in background...", text_color=ACCENT_BLUE)
@@ -756,18 +793,18 @@ class SSHTestGuideDialog(BaseDialog):
                 text_color=ACCENT_BLUE,
             ).pack(side="left", padx=10, pady=6)
 
-            self.copy_link_btn = ctk.CTkButton(
+            self.open_link_btn = ctk.CTkButton(
                 link_box,
-                text="📋 Copy Link",
-                width=90,
+                text="↗ Go to Link",
+                width=105,
                 height=26,
                 font=FONT_SMALL,
-                fg_color=BTN_SECONDARY_BG,
-                hover_color=BTN_SECONDARY_HOVER,
-                text_color=BTN_SECONDARY_TEXT,
-                command=self._copy_url,
+                fg_color=ACCENT_BLUE,
+                hover_color=ACCENT_BLUE_HOVER,
+                text_color="#ffffff",
+                command=self._open_url,
             )
-            self.copy_link_btn.pack(side="right", padx=6, pady=4)
+            self.open_link_btn.pack(side="right", padx=6, pady=4)
 
             # Step 3
             s3 = ctk.CTkFrame(guide_card, fg_color="transparent")
@@ -809,12 +846,16 @@ class SSHTestGuideDialog(BaseDialog):
             if hasattr(self, "copy_key_btn"):
                 self.copy_key_btn.configure(text="✓ Copied!", text_color=ACCENT_GREEN)
 
-    def _copy_url(self):
-        self.clipboard_clear()
-        self.clipboard_append(self.ssh_settings_url)
-        self.update()
-        if hasattr(self, "copy_link_btn"):
-            self.copy_link_btn.configure(text="✓ Copied!", text_color=ACCENT_GREEN)
+    def _open_url(self):
+        def _open():
+            try:
+                webbrowser.open(self.ssh_settings_url)
+            except Exception:
+                pass
+        threading.Thread(target=_open, daemon=True).start()
+        if hasattr(self, "open_link_btn"):
+            self.open_link_btn.configure(text="✓ Opened!", fg_color=ACCENT_GREEN, hover_color=ACCENT_GREEN_HOVER)
+            self.after(2500, lambda: self.open_link_btn.configure(text="↗ Go to Link", fg_color=ACCENT_BLUE, hover_color=ACCENT_BLUE_HOVER) if hasattr(self, "open_link_btn") and self.open_link_btn.winfo_exists() else None)
 
 
 class SSHActiveDeleteBlockDialog(BaseDialog):
@@ -855,6 +896,19 @@ class SSHActiveDeleteBlockDialog(BaseDialog):
 
         ctk.CTkLabel(link_row, text=self.ssh_settings_url, font=FONT_MONO, text_color=ACCENT_BLUE).pack(side="left", padx=12, pady=8)
 
+        self.open_btn = ctk.CTkButton(
+            link_row,
+            text="↗ Go to Link",
+            width=100,
+            height=28,
+            font=FONT_SMALL,
+            fg_color=ACCENT_BLUE,
+            hover_color=ACCENT_BLUE_HOVER,
+            text_color="#ffffff",
+            command=self._open_link,
+        )
+        self.open_btn.pack(side="right", padx=(4, 8))
+
         self.copy_btn = ctk.CTkButton(
             link_row,
             text="📋 Copy Link",
@@ -866,7 +920,7 @@ class SSHActiveDeleteBlockDialog(BaseDialog):
             text_color=BTN_SECONDARY_TEXT,
             command=self._copy_link,
         )
-        self.copy_btn.pack(side="right", padx=8)
+        self.copy_btn.pack(side="right", padx=(0, 4))
 
         btn_row = ctk.CTkFrame(container, fg_color="transparent")
         btn_row.pack(fill="x", side="bottom")
@@ -882,6 +936,16 @@ class SSHActiveDeleteBlockDialog(BaseDialog):
             height=36,
             font=FONT_BODY_BOLD,
         ).pack(side="right")
+
+    def _open_link(self):
+        def _open():
+            try:
+                webbrowser.open(self.ssh_settings_url)
+            except Exception:
+                pass
+        threading.Thread(target=_open, daemon=True).start()
+        if hasattr(self, "open_btn"):
+            self.open_btn.configure(text="✓ Opened!", fg_color=ACCENT_GREEN, hover_color=ACCENT_GREEN_HOVER)
 
     def _copy_link(self):
         self.clipboard_clear()

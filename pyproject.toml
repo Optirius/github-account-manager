@@ -1,6 +1,6 @@
 [project]
 name = "github-account-manager"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Secure Desktop GUI Multi-Account Manager for GitHub with Python and uv"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -12,6 +12,9 @@ dependencies = [
     "pillow>=12.3.0",
     "pydantic>=2.13.4",
 ]
+
+[tool.hatch.version]
+path = "src/github_account_manager/version.py"
 
 [project.scripts]
 github-account-manager = "github_account_manager.main:main"

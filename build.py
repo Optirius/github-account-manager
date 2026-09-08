@@ -38,35 +38,16 @@ def clean_build_artifacts():
             shutil.rmtree(p, ignore_errors=True)
 
 
-def resolve_version() -> str:
-    env_ver = os.getenv("APP_VERSION_OVERRIDE")
-    if env_ver:
-        return env_ver.strip().lstrip("v")
-    try:
-        res = subprocess.run(["git", "rev-list", "--count", "HEAD"], capture_output=True, text=True, timeout=2)
-        if res.returncode == 0 and res.stdout.strip().isdigit():
-            return f"0.1.{res.stdout.strip()}"
-    except Exception:
-        pass
-    return "0.1.0"
+# Add src to sys.path to access centralized version
+sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
+from github_account_manager.version import get_version, set_version
 
 
-def write_embedded_version(version: str):
-    """Bake resolved version into source code and assets so standalone binaries always report the exact version."""
-    ver_py = Path("src/github_account_manager/_version.py")
-    ver_py.parent.mkdir(parents=True, exist_ok=True)
-    ver_py.write_text(f'"""Build-time embedded application version."""\n__version__ = "{version}"\n', encoding="utf-8")
+def run_pyinstaller(target_os: str, version_override: Optional[str] = None):
+    if version_override:
+        set_version(version_override)
 
-    Path("version.txt").write_text(f"{version}\n", encoding="utf-8")
-    assets_dir = Path("assets")
-    if assets_dir.exists():
-        (assets_dir / "version.txt").write_text(f"{version}\n", encoding="utf-8")
-    print(f"[VERSION] Embedded application version: v{version}")
-
-
-def run_pyinstaller(target_os: str):
-    version = resolve_version()
-    write_embedded_version(version)
+    version = get_version()
     print(f"[BUILD] Packaging Single Standalone Executable for {target_os.upper()} (Version: v{version})...")
 
     ctk_path = Path(customtkinter.__file__).parent
@@ -210,11 +191,12 @@ def publish_artifacts(target_os: str, archive_path: Path, publish_dir_str: Optio
 def main():
     parser = argparse.ArgumentParser(description="Cross-platform build and packaging script.")
     parser.add_argument("--publish-dir", default=None, help="Directory to copy release artifacts to.")
+    parser.add_argument("--version", default=None, help="Explicit version to set (e.g. 0.1.29).")
     args = parser.parse_args()
 
     target_os = get_target_platform()
     clean_build_artifacts()
-    run_pyinstaller(target_os)
+    run_pyinstaller(target_os, version_override=args.version)
     archive = create_release_archive(target_os)
     publish_artifacts(target_os, archive, args.publish_dir)
     print("[SUCCESS] All build and release steps completed successfully!")

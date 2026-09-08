@@ -155,6 +155,9 @@ class SSHView(ctk.CTkFrame):
         )
         card.pack(fill="x", pady=6)
 
+        # Linked Account Profile Check
+        linked_acc = self.manager.get_account_for_ssh_key(key_info.private_key_path)
+
         # Header Row
         header = ctk.CTkFrame(card, fg_color="transparent")
         header.pack(fill="x", padx=16, pady=(14, 4))
@@ -167,8 +170,16 @@ class SSHView(ctk.CTkFrame):
         )
         title_lbl.pack(side="left")
 
-        # Key type badge
-        StatusBadge(header, key_info.key_type, "info").pack(side="right")
+        # Badges on right
+        badge_box = ctk.CTkFrame(header, fg_color="transparent")
+        badge_box.pack(side="right")
+
+        if linked_acc:
+            StatusBadge(badge_box, f"👤 {linked_acc.name}", "success").pack(side="left", padx=4)
+        else:
+            StatusBadge(badge_box, "Unassigned", "muted").pack(side="left", padx=4)
+
+        StatusBadge(badge_box, key_info.key_type, "info").pack(side="left", padx=4)
 
         # Details
         body = ctk.CTkFrame(card, fg_color="transparent")
@@ -193,7 +204,7 @@ class SSHView(ctk.CTkFrame):
         # Public Key Box
         if key_info.public_key_content:
             pub_box = ctk.CTkFrame(card, fg_color=BG_INSET, corner_radius=6, border_width=1, border_color=BORDER_COLOR)
-            pub_box.pack(fill="x", padx=16, pady=(6, 12))
+            pub_box.pack(fill="x", padx=16, pady=(6, 10))
 
             preview = key_info.public_key_content
             if len(preview) > 90:
@@ -205,6 +216,41 @@ class SSHView(ctk.CTkFrame):
                 font=FONT_MONO_SMALL,
                 text_color=TEXT_SECONDARY,
             ).pack(side="left", padx=12, pady=8)
+
+        # Linked Account Profile Dropdown Row
+        link_row = ctk.CTkFrame(card, fg_color="transparent")
+        link_row.pack(fill="x", padx=16, pady=(0, 12))
+
+        ctk.CTkLabel(
+            link_row,
+            text="Linked Account Profile:",
+            font=FONT_BODY_BOLD,
+            text_color=TEXT_PRIMARY,
+        ).pack(side="left", padx=(0, 10))
+
+        accounts = self.manager.settings.accounts
+        if accounts:
+            account_options = ["None (Unassigned)"] + [f"{acc.name} ({acc.email})" for acc in accounts]
+            account_combo = ctk.CTkComboBox(
+                link_row,
+                values=account_options,
+                width=280,
+                height=32,
+                font=FONT_BODY,
+                command=lambda choice, k=key_info: self._handle_account_link_change(k, choice),
+            )
+            account_combo.pack(side="left")
+            if linked_acc:
+                account_combo.set(f"{linked_acc.name} ({linked_acc.email})")
+            else:
+                account_combo.set("None (Unassigned)")
+        else:
+            ctk.CTkLabel(
+                link_row,
+                text="No accounts configured yet (add one in Accounts tab to link).",
+                font=FONT_SMALL,
+                text_color=TEXT_MUTED,
+            ).pack(side="left")
 
         # Action Buttons
         actions = ctk.CTkFrame(card, fg_color="transparent")
@@ -334,6 +380,20 @@ class SSHView(ctk.CTkFrame):
             error_title="SSH Key Status Check Error",
         )
 
+    def _handle_account_link_change(self, key_info: SSHKeyInfo, choice: str):
+        target_account_id = None
+        if choice != "None (Unassigned)":
+            target_acc = next((a for a in self.manager.settings.accounts if f"{a.name} ({a.email})" == choice), None)
+            if target_acc:
+                target_account_id = target_acc.id
+
+        success, msg = self.manager.link_ssh_key_to_account(key_info.private_key_path, target_account_id)
+        if success:
+            self.on_notify("SSH Key Updated", msg)
+            self.refresh()
+        else:
+            self.on_notify("Error", msg, is_error=True)
+
     def _open_generate_dialog(self):
         def handle_gen(data: dict) -> Tuple[bool, str]:
             try:
@@ -343,8 +403,15 @@ class SSHView(ctk.CTkFrame):
                     key_type=data["key_type"],
                     passphrase=data.get("passphrase", ""),
                 )
+                target_account_id = data.get("target_account_id")
+                link_msg = ""
+                if target_account_id:
+                    ok, l_msg = self.manager.link_ssh_key_to_account(priv.as_posix(), target_account_id)
+                    if ok:
+                        link_msg = " and linked to account profile."
+
                 self.after(0, lambda: [
-                    self.on_notify("Key Generated", f"Created key pair: {priv.name}"),
+                    self.on_notify("Key Generated", f"Created key pair: {priv.name}{link_msg}"),
                     self.refresh(),
                 ])
                 return True, f"Created {priv.name}"
@@ -353,4 +420,8 @@ class SSHView(ctk.CTkFrame):
                 self.after(0, lambda: self.on_notify("Error", f"Failed: {err_msg}", is_error=True))
                 return False, err_msg
 
-        NewSSHKeyDialog(self.winfo_toplevel(), on_generate=handle_gen)
+        NewSSHKeyDialog(
+            self.winfo_toplevel(),
+            available_accounts=self.manager.settings.accounts,
+            on_generate=handle_gen,
+        )
