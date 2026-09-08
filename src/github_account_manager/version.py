@@ -9,7 +9,7 @@ import subprocess
 import sys
 
 # Canonical application version
-__version__ = "0.1.28"
+__version__ = "0.1.29"
 
 
 def get_version() -> str:
@@ -55,14 +55,32 @@ def set_version(new_version: str) -> str:
     Returns:
         Cleaned version string without leading 'v'.
     """
+    global __version__
     clean_ver = new_version.strip().lstrip("v")
     version_file = Path(__file__).resolve()
     content = version_file.read_text(encoding="utf-8")
 
-    new_content = re.sub(
-        r'__version__\s*=\s*["\'][^"\']+["\']',
-        f'__version__ = "0.1.99"',
+    new_content, count = re.subn(
+        r"^__version__\s*=\s*[\"'][^\"']+[\"']",
+        f'__version__ = "{clean_ver}"',
         content,
+        count=1,
+        flags=re.MULTILINE,
     )
+    if count == 0:
+        raise ValueError("Could not find __version__ definition to update")
     version_file.write_text(new_content, encoding="utf-8")
+
+    # Invalidate pycache & update in-memory global
+    __version__ = clean_ver
+    try:
+        pycache = version_file.parent / "__pycache__"
+        if pycache.exists():
+            for pyc in pycache.glob("version*.pyc"):
+                pyc.unlink(missing_ok=True)
+        import importlib
+        importlib.invalidate_caches()
+    except Exception:
+        pass
+
     return clean_ver

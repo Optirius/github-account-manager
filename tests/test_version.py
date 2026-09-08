@@ -1,4 +1,4 @@
-﻿import os
+import os
 from github_account_manager.version import __version__, get_version, set_version
 import github_account_manager
 from github_account_manager.config import APP_VERSION
@@ -28,15 +28,16 @@ def test_set_version_updates_canonical(monkeypatch):
     monkeypatch.delenv("APP_VERSION_OVERRIDE", raising=False)
     original = __version__
     try:
-        updated = set_version("0.1.99")
-        assert updated == "0.1.99"
+        updated = set_version("0.9.87")
+        assert updated == "0.9.87"
         # Reload to verify persistence
         import importlib
         import github_account_manager.version as v_mod
         importlib.reload(v_mod)
-        assert v_mod.__version__ == "0.1.99"
+        assert v_mod.__version__ == "0.9.87"
     finally:
         set_version(original)
         import importlib
         import github_account_manager.version as v_mod
         importlib.reload(v_mod)
+        assert v_mod.__version__ == original
