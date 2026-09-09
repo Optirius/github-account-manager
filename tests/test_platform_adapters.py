@@ -76,3 +76,58 @@ def test_macos_and_linux_dynamic_detection():
 
     assert isinstance(mac.get_ide_github_accounts(), list)
     assert isinstance(lin.get_ide_github_accounts(), list)
+
+
+def test_linux_safe_xdg_path_resolution(monkeypatch):
+    adapter = LinuxPlatformAdapter()
+
+    # When XDG_CONFIG_HOME is empty string, should safely fall back to ~/.config
+    monkeypatch.setenv("XDG_CONFIG_HOME", "")
+    paths = adapter.get_ide_settings_paths("vscode")
+    assert any(".config" in str(p) for p in paths)
+
+    # When XDG_CONFIG_HOME is set to custom path
+    monkeypatch.setenv("XDG_CONFIG_HOME", "/custom/config/path")
+    paths_custom = adapter.get_ide_settings_paths("vscode")
+    assert any("/custom/config/path" in str(p) for p in paths_custom)
+
+
+def test_linux_git_credentials_parsing_and_deletion(tmp_path, monkeypatch):
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+    git_creds = tmp_path / ".git-credentials"
+    git_creds.write_text(
+        "https://octocat:ghp_supersecretpattoken999@github.com\n"
+        "https://workuser:ghp_worksecrettoken888@github.com\n"
+        "https://gitlabuser:secret@gitlab.com\n",
+        encoding="utf-8",
+    )
+
+    adapter = LinuxPlatformAdapter()
+    creds = adapter.list_git_credentials()
+
+    # Must find the 2 github credentials
+    assert len(creds) == 2
+    users = [c["user"] for c in creds]
+    assert "octocat" in users
+    assert "workuser" in users
+
+    # CRITICAL: ensure secret tokens are NEVER present in user field
+    for c in creds:
+        assert "ghp_" not in c["user"]
+        assert "secret" not in c["user"]
+
+    # Target-aware deletion: delete only octocat
+    target = "github.com (octocat) [~/.git-credentials]"
+    assert adapter.delete_git_credential(target) is True
+
+    # Check remaining credentials
+    remaining = adapter.list_git_credentials()
+    assert len(remaining) == 1
+    assert remaining[0]["user"] == "workuser"
+
+    # Gitlab credential untouched in file
+    content = git_creds.read_text(encoding="utf-8")
+    assert "gitlab.com" in content
+    assert "workuser" in content
+    assert "octocat" not in content

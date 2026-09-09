@@ -114,14 +114,14 @@ Achieve full, out-of-the-box compatibility and native execution on **Linux** (Li
 ---
 
 ### Phase 3: Linux Credential Scanner & Security Hardening (`platform/linux.py`)
-- [ ] **3.1 Sanitize Stored Git Credential Parser (`linux.py:259-275`)**:
+- [x] **3.1 Sanitize Stored Git Credential Parser (`linux.py:259-275`)**:
   - Replace naive `line.split("@")[0].split("//")[-1]` with `urllib.parse.urlsplit`.
   - Extract only `parsed.username` (e.g. `john`), masking or omitting `parsed.password` to prevent leaking Personal Access Tokens into the UI credential list.
-- [ ] **3.2 Target-Aware Credential Deletion (`linux.py:297-320`)**:
+- [x] **3.2 Target-Aware Credential Deletion (`linux.py:297-320`)**:
   - In `delete_git_credential(target)`:
     - If `target` refers to `~/.git-credentials`, only remove lines matching that specific target URL/user.
     - If `target` refers to `libsecret`, run `secret-tool clear` targeting only the specific host/service rather than a blanket wipe.
-- [ ] **3.3 Safe XDG Path Resolution (`linux.py:20-70`)**:
+- [x] **3.3 Safe XDG Path Resolution (`linux.py:20-70`)**:
   - Use `os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config")` to guard against empty strings (`XDG_CONFIG_HOME=""`).
 
 ---
