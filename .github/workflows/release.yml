@@ -89,11 +89,19 @@ jobs:
           enable-cache: true
           version: "latest"
 
-      - name: Set up Python 3.12
+      - name: Set up Python 3.12 (Windows & macOS)
+        if: runner.os != 'Linux'
         run: uv python install 3.12
 
-      - name: Install Project & Dev Dependencies
+      - name: Install Project & Dev Dependencies (Windows & macOS)
+        if: runner.os != 'Linux'
         run: uv sync --all-groups
+
+      - name: Install Project & Dev Dependencies with System Python (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          uv venv --python /usr/bin/python3
+          uv sync --python /usr/bin/python3 --all-groups
 
       - name: Run Test Suite
         if: runner.os != 'Linux'
@@ -105,6 +113,13 @@ jobs:
 
       - name: Build Application Package (with Injected Version)
         run: uv run python build.py
+
+      - name: Smoke Test Standalone Release Binary (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          tar -xzf dist/github-account-manager-linux-x64.tar.gz -C /tmp/
+          chmod +x /tmp/github-account-manager
+          xvfb-run /tmp/github-account-manager --smoke-test
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4

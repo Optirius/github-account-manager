@@ -103,6 +103,15 @@ The app automatically detects installed development tools on Windows, macOS, and
 
 ## 💻 Developer & Build Instructions
 
+### Prerequisites
+* **Windows & macOS**: Python 3.12+ (Tkinter is included with the official installer).
+* **Linux (Ubuntu, Debian, Linux Mint, etc.)**: Install the system Tkinter GUI module:
+  ```bash
+  sudo apt update && sudo apt install -y python3-tk
+  ```
+  *(Fedora: `sudo dnf install -y python3-tkinter` | Arch: `sudo pacman -S tk`)*
+
+### Setup & Run
 If you want to build or run the source code locally:
 
 ```bash

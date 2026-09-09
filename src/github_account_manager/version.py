@@ -9,7 +9,7 @@ import subprocess
 import sys
 
 # Canonical application version
-__version__ = "0.1.29"
+__version__ = "0.1.30"
 
 
 def get_version() -> str:

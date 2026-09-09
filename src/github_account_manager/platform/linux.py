@@ -1,5 +1,6 @@
 """Linux-specific Platform Adapter implementation."""
 import os
+import functools
 from pathlib import Path
 import re
 import shutil
@@ -18,7 +19,8 @@ class LinuxPlatformAdapter(PlatformAdapter):
         return "linux"
 
     def get_ide_settings_paths(self, ide_id: str) -> List[Path]:
-        config_dir = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+        xdg = os.environ.get("XDG_CONFIG_HOME")
+        config_dir = Path(xdg) if xdg and xdg.strip() else Path.home() / ".config"
 
         ide_map = {
             "vscode": [
@@ -48,7 +50,8 @@ class LinuxPlatformAdapter(PlatformAdapter):
     def discover_editor_configs(self) -> List[Dict[str, Any]]:
         """Dynamically find any editor/IDE configuration directories in ~/.config."""
         configs = []
-        config_dir = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+        xdg = os.environ.get("XDG_CONFIG_HOME")
+        config_dir = Path(xdg) if xdg and xdg.strip() else Path.home() / ".config"
         if config_dir.exists():
             try:
                 for folder in config_dir.iterdir():
@@ -257,16 +260,30 @@ class LinuxPlatformAdapter(PlatformAdapter):
         return accounts
 
     def list_git_credentials(self) -> List[Dict[str, Any]]:
+        import urllib.parse
+
         credentials = []
         # Check ~/.git-credentials or secret-tool
         git_cred_file = Path.home() / ".git-credentials"
         if git_cred_file.exists():
             try:
                 for line in git_cred_file.read_text(encoding="utf-8").splitlines():
-                    if "github.com" in line:
+                    line_clean = line.strip()
+                    if not line_clean or line_clean.startswith("#"):
+                        continue
+                    if "github.com" in line_clean:
+                        try:
+                            url_to_parse = line_clean if "://" in line_clean else f"https://{line_clean}"
+                            parsed = urllib.parse.urlsplit(url_to_parse)
+                            username = parsed.username or "Stored Credential"
+                        except Exception:
+                            # Safe fallback without leaking token/password
+                            at_split = line_clean.split("@")[0].split("//")[-1]
+                            username = at_split.split(":")[0] if ":" in at_split else at_split
+
                         credentials.append({
-                            "target": "github.com (~/.git-credentials)",
-                            "user": line.split("@")[0].split("//")[-1] if "@" in line else "Stored Credential",
+                            "target": f"github.com ({username}) [~/.git-credentials]",
+                            "user": username,
                             "type": "Plaintext File Credential",
                             "is_conflicting": True,
                         })
@@ -295,16 +312,55 @@ class LinuxPlatformAdapter(PlatformAdapter):
         return credentials
 
     def delete_git_credential(self, target: str) -> bool:
-        # If .git-credentials, clean github entries
+        # If target relates specifically to .git-credentials
+        if ".git-credentials" in target:
+            git_cred_file = Path.home() / ".git-credentials"
+            if git_cred_file.exists():
+                try:
+                    # Extract username if formatted as "github.com (username) [~/.git-credentials]"
+                    user_match = re.search(r"\(([^)]+)\)", target)
+                    target_user = user_match.group(1).strip() if user_match else None
+
+                    lines = git_cred_file.read_text(encoding="utf-8").splitlines()
+                    new_lines = []
+                    for l in lines:
+                        if "github.com" in l:
+                            if target_user and (f"//{target_user}:" in l or f"//{target_user}@" in l):
+                                continue
+                            elif not target_user:
+                                continue
+                        new_lines.append(l)
+
+                    git_cred_file.write_text("\n".join(new_lines) + ("\n" if new_lines else ""), encoding="utf-8")
+                    return True
+                except Exception as e:
+                    logger.error(f"Failed to edit .git-credentials: {e}")
+                    return False
+
+        # If target relates specifically to libsecret
+        if "libsecret" in target.lower():
+            if shutil.which("secret-tool"):
+                try:
+                    res = safe_subprocess_run(
+                        ["secret-tool", "clear", "service", "git"],
+                        capture_output=True,
+                        text=True,
+                        timeout=5,
+                    )
+                    return res.returncode == 0
+                except Exception as e:
+                    logger.debug(f"secret-tool clear notice: {e}")
+                    return False
+
+        # Generic deletion fallback
         git_cred_file = Path.home() / ".git-credentials"
         if git_cred_file.exists():
             try:
                 lines = [l for l in git_cred_file.read_text(encoding="utf-8").splitlines() if "github.com" not in l]
-                git_cred_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+                git_cred_file.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
             except Exception as e:
                 logger.error(f"Failed to edit .git-credentials: {e}")
 
-        # If secret-tool
         if shutil.which("secret-tool"):
             try:
                 safe_subprocess_run(
@@ -327,5 +383,40 @@ class LinuxPlatformAdapter(PlatformAdapter):
     def get_default_data_dir(self) -> Path:
         return Path.home() / ".github_account_manager"
 
+    @functools.lru_cache(maxsize=1)
     def get_system_font_family(self) -> str:
+        """Return best available system font family on Linux."""
+        candidates = ["Ubuntu", "Inter", "Cantarell", "DejaVu Sans", "Liberation Sans", "Noto Sans"]
+        
+        # Try fc-list first for fast font discovery
+        try:
+            res = safe_subprocess_run(["fc-list", ":", "family"], capture_output=True, text=True, timeout=2)
+            if res.returncode == 0 and res.stdout:
+                families = set(line.strip().lower() for line in res.stdout.splitlines() if line.strip())
+                for c in candidates:
+                    if c.lower() in families:
+                        return c
+        except Exception:
+            pass
+
+        font_dirs = [
+            Path("/usr/share/fonts"),
+            Path("/usr/local/share/fonts"),
+            Path.home() / ".local" / "share" / "fonts",
+        ]
+        available_fonts = set()
+        for fdir in font_dirs:
+            if fdir.exists():
+                try:
+                    for f in fdir.glob("**/*"):
+                        if f.is_file() and f.suffix.lower() in [".ttf", ".otf"]:
+                            available_fonts.add(f.stem.lower())
+                except Exception:
+                    pass
+
+        for c in candidates:
+            c_clean = c.lower().replace(" ", "")
+            if any(c_clean in af.replace("-", "").replace("_", "") for af in available_fonts):
+                return c
+
         return "Ubuntu"

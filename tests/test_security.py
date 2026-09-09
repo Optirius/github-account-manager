@@ -2,7 +2,7 @@ import sys
 import pytest
 from github_account_manager.models import Account, FolderMapping, sanitize_git_string
 from github_account_manager.services.github_service import redact_token_from_string
-from github_account_manager.services.keyring_service import mask_token, DPAPIFallback
+from github_account_manager.services.keyring_service import mask_token, DPAPIFallback, LinuxVaultFallback, KeyringService
 from github_account_manager.services.ssh_service import SSHService
 
 
@@ -50,3 +50,42 @@ def test_dpapi_fallback_encryption():
 
     decrypted = DPAPIFallback.decrypt(encrypted)
     assert decrypted == secret
+
+
+def test_cross_platform_vault_fallback_encryption():
+    secret = "ghp_linux_test_pat_token_value_98765"
+    encrypted = LinuxVaultFallback.encrypt(secret)
+    assert encrypted is not None
+    assert encrypted != secret
+
+    decrypted = LinuxVaultFallback.decrypt(encrypted)
+    assert decrypted == secret
+
+
+def test_keyring_service_fallback_roundtrip(tmp_path, monkeypatch):
+    import keyring
+
+    def failing_set_password(*args, **kwargs):
+        raise RuntimeError("Keyring daemon simulated failure")
+
+    def failing_get_password(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(keyring, "set_password", failing_set_password)
+    monkeypatch.setattr(keyring, "get_password", failing_get_password)
+
+    service = KeyringService(service_name="test-service")
+    service.fallback_file = tmp_path / ".vault.dat"
+
+    # Save token via fallback
+    ok = service.save_token("test-account-1", "ghp_mock_token_12345")
+    assert ok is True
+    assert service.fallback_file.exists()
+
+    # Retrieve token via fallback
+    retrieved = service.get_token("test-account-1")
+    assert retrieved == "ghp_mock_token_12345"
+
+    # Delete token
+    assert service.delete_token("test-account-1") is True
+    assert service.get_token("test-account-1") is None

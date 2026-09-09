@@ -1,5 +1,16 @@
-﻿from unittest.mock import patch, MagicMock
-from github_account_manager.ui.components.dialogs import SSHTestGuideDialog, SSHActiveDeleteBlockDialog, NewSSHKeyDialog
+import pytest
+from unittest.mock import patch, MagicMock
+
+try:
+    import tkinter
+    import customtkinter
+    from github_account_manager.ui.components.dialogs import SSHTestGuideDialog, SSHActiveDeleteBlockDialog, NewSSHKeyDialog
+    has_tkinter = True
+except (ImportError, ModuleNotFoundError):
+    has_tkinter = False
+
+pytestmark = pytest.mark.skipif(not has_tkinter, reason="Tkinter is not installed on this system")
+
 from github_account_manager.models import Account
 
 
