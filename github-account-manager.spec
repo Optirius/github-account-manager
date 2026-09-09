@@ -26,19 +26,28 @@ if sys.platform.startswith("linux"):
     if linux_rthook.exists():
         runtime_hooks.append(str(linux_rthook))
 
-    # Collect shared libraries for Tcl/Tk and BLT
-    so_patterns = [
-        "/usr/lib*/**/libtcl8.6*.so*",
-        "/usr/lib*/**/libtk8.6*.so*",
-        "/usr/lib*/**/libBLT*.so*",
+    # Fast targeted discovery for Tcl/Tk and BLT shared libraries in standard library paths
+    candidate_lib_dirs = [
+        Path("/usr/lib/x86_64-linux-gnu"),
+        Path("/usr/lib/aarch64-linux-gnu"),
+        Path("/usr/lib64"),
+        Path("/usr/lib"),
     ]
+    patterns = ["libtcl8.6*.so*", "libtk8.6*.so*", "libBLT*.so*"]
     seen_sos = set()
-    for pattern in so_patterns:
-        for so_path in glob.glob(pattern, recursive=True):
-            p = Path(so_path)
-            if p.name not in seen_sos:
-                seen_sos.add(p.name)
-                binaries.append((str(p), "."))
+    for ldir in candidate_lib_dirs:
+        if ldir.is_dir():
+            for pat in patterns:
+                for so_file in ldir.glob(pat):
+                    if so_file.is_file() and so_file.name not in seen_sos:
+                        seen_sos.add(so_file.name)
+                        try:
+                            resolved = so_file.resolve()
+                            binaries.append((str(resolved), "."))
+                            if resolved.name != so_file.name:
+                                binaries.append((str(so_file), "."))
+                        except Exception:
+                            binaries.append((str(so_file), "."))
 
     # Collect Tcl and Tk asset directories
     tcl_share = Path("/usr/share/tcltk")
