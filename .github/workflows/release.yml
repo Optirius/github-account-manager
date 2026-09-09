@@ -29,17 +29,15 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Compute Dynamic Version from Commits
+      - name: Determine Canonical Release Version
         id: version_step
         run: |
-          COMMIT_COUNT=$(git rev-list --count HEAD)
-          SHORT_SHA=$(git rev-parse --short HEAD)
-          
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             RELEASE_TAG="${{ github.ref_name }}"
             RELEASE_VER="${RELEASE_TAG#v}"
           else
-            RELEASE_VER="0.1.${COMMIT_COUNT}"
+            CANONICAL_VER=$(python3 -c "import sys; sys.path.insert(0, 'src'); from github_account_manager.version import get_version; print(get_version())")
+            RELEASE_VER="${CANONICAL_VER}"
             RELEASE_TAG="v${RELEASE_VER}"
           fi
           
@@ -112,7 +110,7 @@ jobs:
         run: xvfb-run uv run pytest
 
       - name: Build Application Package (with Injected Version)
-        run: uv run python build.py
+        run: uv run python build.py --version "${{ needs.determine-version.outputs.release_version }}"
 
       - name: Smoke Test Standalone Release Binary (Linux)
         if: runner.os == 'Linux'

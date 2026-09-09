@@ -6,7 +6,7 @@ from PyInstaller.utils.hooks import collect_all
 
 ctk_spec = importlib.util.find_spec("customtkinter")
 ctk_path = str(ctk_spec.submodule_search_locations[0]) if (ctk_spec and ctk_spec.submodule_search_locations) else "customtkinter"
-datas = [(ctk_path, 'customtkinter'), ('assets', 'assets')]
+datas = [(ctk_path, 'customtkinter'), ('assets', 'assets'), ('version.txt', '.')]
 binaries = []
 hiddenimports = [
     'github_account_manager',

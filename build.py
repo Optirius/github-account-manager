@@ -54,8 +54,9 @@ from github_account_manager.version import get_version, set_version
 
 
 def run_pyinstaller(target_os: str, version_override: Optional[str] = None):
-    if version_override:
-        set_version(version_override)
+    effective_override = version_override or os.environ.get("APP_VERSION_OVERRIDE")
+    if effective_override:
+        set_version(effective_override)
 
     version = get_version()
     print(f"[BUILD] Packaging Single Standalone Executable for {target_os.upper()} (Version: v{version})...")

@@ -41,3 +41,13 @@ def test_set_version_updates_canonical(monkeypatch):
         import github_account_manager.version as v_mod
         importlib.reload(v_mod)
         assert v_mod.__version__ == original
+
+
+def test_version_txt_matches_canonical():
+    from pathlib import Path
+    root_v = Path(__file__).resolve().parent.parent / "version.txt"
+    assert root_v.exists()
+    file_val = root_v.read_text(encoding="utf-8").strip().lstrip("v")
+    assert file_val == __version__
+    assert get_version() == file_val
+
