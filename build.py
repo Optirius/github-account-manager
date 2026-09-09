@@ -16,7 +16,17 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-import customtkinter
+import importlib.util
+
+
+def _get_customtkinter_path() -> Path:
+    try:
+        spec = importlib.util.find_spec("customtkinter")
+        if spec and spec.submodule_search_locations:
+            return Path(spec.submodule_search_locations[0])
+    except Exception:
+        pass
+    return Path("customtkinter")
 
 
 def get_target_platform() -> str:
@@ -50,7 +60,7 @@ def run_pyinstaller(target_os: str, version_override: Optional[str] = None):
     version = get_version()
     print(f"[BUILD] Packaging Single Standalone Executable for {target_os.upper()} (Version: v{version})...")
 
-    ctk_path = Path(customtkinter.__file__).parent
+    ctk_path = _get_customtkinter_path()
     sep = ";" if target_os == "windows" else ":"
 
     env = os.environ.copy()
@@ -144,6 +154,13 @@ def create_release_archive(target_os: str) -> Path:
 
     elif target_os == "linux":
         bin_file = dist_dir / "github-account-manager"
+        if not bin_file.exists():
+            print(f"[ERROR] Output binary not found: {bin_file}")
+            sys.exit(1)
+        try:
+            os.chmod(bin_file, 0o755)
+        except Exception:
+            pass
         archive_name = dist_dir / "github-account-manager-linux-x64.tar.gz"
         with tarfile.open(archive_name, "w:gz") as tar:
             tar.add(bin_file, arcname="github-account-manager")
@@ -180,6 +197,16 @@ def publish_artifacts(target_os: str, archive_path: Path, publish_dir_str: Optio
             dest_exe = pub_dir / "github-account-manager.exe"
             shutil.copy2(exe_file, dest_exe)
             print(f"[OK] Copied standalone executable directly to: {dest_exe}")
+    elif target_os == "linux":
+        bin_file = dist_dir / "github-account-manager"
+        if bin_file.exists():
+            dest_bin = pub_dir / "github-account-manager"
+            shutil.copy2(bin_file, dest_bin)
+            try:
+                os.chmod(dest_bin, 0o755)
+            except Exception:
+                pass
+            print(f"[OK] Copied standalone executable directly to: {dest_bin}")
 
     # Copy archive file
     if archive_path and archive_path.exists():

@@ -38,7 +38,11 @@ if sys.platform == "darwin":
     _SYS_FONT = "SF Pro Text"
     _MONO_FONT = "Menlo"
 elif sys.platform.startswith("linux"):
-    _SYS_FONT = "Ubuntu"
+    try:
+        from github_account_manager.platform.linux import LinuxPlatformAdapter
+        _SYS_FONT = LinuxPlatformAdapter().get_system_font_family()
+    except Exception:
+        _SYS_FONT = "Ubuntu"
     _MONO_FONT = "Ubuntu Mono"
 else:
     _SYS_FONT = "Segoe UI"

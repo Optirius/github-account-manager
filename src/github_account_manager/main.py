@@ -102,7 +102,23 @@ def main(log_fn=None):
     if log_fn:
         log_fn(msg)
 
-    # 3. Pre-flight check for Tkinter availability
+    # 3. Handle CLI information arguments (help, version)
+    if "--version" in sys.argv:
+        print(f"{APP_NAME} v{APP_VERSION}")
+        sys.exit(0)
+
+    if "--help" in sys.argv or "-h" in sys.argv:
+        print(f"{APP_NAME} v{APP_VERSION}")
+        print("Cross-platform desktop GitHub multi-account and SSH profile manager.")
+        print("\nUsage:")
+        print("  github-account-manager [options]")
+        print("\nOptions:")
+        print("  --version          Display application version and exit")
+        print("  --smoke-test       Verify UI initialization and exit without entering mainloop")
+        print("  -h, --help         Show this help message and exit")
+        sys.exit(0)
+
+    # 4. Pre-flight check for Tkinter availability
     try:
         import tkinter
     except ModuleNotFoundError:
@@ -131,6 +147,20 @@ def main(log_fn=None):
             except Exception:
                 pass
         sys.exit(1)
+
+    # 5. Handle smoke test (requires Tkinter)
+    if "--smoke-test" in sys.argv:
+        if log_fn:
+            log_fn("Running smoke test...")
+        from github_account_manager.ui.app import App
+        app = App()
+        app.update()
+        app.destroy()
+        smoke_msg = f"[OK] Smoke test passed for {APP_NAME} v{APP_VERSION}"
+        if log_fn:
+            log_fn(smoke_msg)
+        print(smoke_msg)
+        sys.exit(0)
 
     try:
         if log_fn:

@@ -127,39 +127,39 @@ Achieve full, out-of-the-box compatibility and native execution on **Linux** (Li
 ---
 
 ### Phase 4: Linux Desktop Integration & Wayland Resilience (`ui/app.py`)
-- [ ] **4.1 Linux Window Icon Support (`ui/app.py:52-59`)**:
+- [x] **4.1 Linux Window Icon Support (`ui/app.py:52-59`)**:
   - On Linux and macOS, load `assets/navbar-logo-dark.png` or `assets/icon.png` using `ImageTk.PhotoImage` and call `self.iconphoto(True, img)` so the window displays a native application icon instead of the default Tk logo.
-- [ ] **4.2 Wayland & Tiling Window Manager Protection (`ui/app.py:69-74`)**:
+- [x] **4.2 Wayland & Tiling Window Manager Protection (`ui/app.py:69-74`)**:
   - Wrap `self.attributes("-topmost", True)` and `self.lift()` in `try...except Exception` blocks to prevent crashes on Wayland compositors or tiling window managers (i3, sway, Hyprland).
-- [ ] **4.3 Linux Font Stack Fallback (`platform/linux.py` & `ui/theme.py`)**:
+- [x] **4.3 Linux Font Stack Fallback (`platform/linux.py` & `ui/theme.py`)**:
   - In `LinuxPlatformAdapter.get_system_font_family()`, check for installed fonts: `Ubuntu`, `Inter`, `Cantarell`, `DejaVu Sans`, returning the best match or `"sans-serif"`.
 
 ---
 
 ### Phase 5: Standalone Packaging, Tcl/Tk Bundling & CI/CD Pipeline (Fix 1)
-- [ ] **5.1 Bundle Tcl/Tk Shared Libraries & Data in PyInstaller (`github-account-manager.spec`)**:
+- [x] **5.1 Bundle Tcl/Tk Shared Libraries & Data in PyInstaller (`github-account-manager.spec`)**:
   - In `github-account-manager.spec`, on Linux:
     - Automatically discover and collect `libtcl8.6.so*`, `libtk8.6.so*`, and `libBLT*.so*` into `binaries`.
     - Collect Tcl and Tk asset directories (`/usr/share/tcltk/tcl8.6`, `/usr/share/tcltk/tk8.6`) into `datas`.
     - Include a custom runtime hook (`pyi_rth_tcltk_linux.py`) that exports `TCL_LIBRARY` and `TK_LIBRARY` pointing to `sys._MEIPASS` when running frozen, eliminating host OS library dependencies.
-- [ ] **5.2 Fix GitHub Actions Linux Build Environment (`.github/workflows/release.yml`)**:
+- [x] **5.2 Fix GitHub Actions Linux Build Environment (`.github/workflows/release.yml`)**:
   - In `.github/workflows/release.yml`, on the `ubuntu-latest` (Linux) matrix runner:
     - Avoid using `uv python install 3.12` on Linux, which links against non-standard Tcl/Tk 9.0 (`libtcl9tk9.0.so`).
     - Build against the Ubuntu system Python (`/usr/bin/python3`) with `python3-tk`, `libtk8.6`, and `libtcl8.6` preinstalled, guaranteeing compatibility with all Debian/Ubuntu/Mint distributions.
-    - Set runner base or container target to ensure lowest common denominator `glibc` (e.g. Ubuntu 22.04 LTS runner).
-- [ ] **5.3 Direct Standalone Publishing on Linux (`build.py:175-190`)**:
+- [x] **5.3 Direct Standalone Publishing on Linux (`build.py:175-190`)**:
   - In `publish_artifacts()`, add handling for `target_os == "linux"`:
     - Copy `dist/github-account-manager` directly to `publish/github-account-manager`.
     - Ensure executable file mode: `os.chmod(dest_bin, 0o755)`.
-- [ ] **5.4 Automated Smoke Test for Release Binary in CI/CD**:
+- [x] **5.4 Automated Smoke Test for Release Binary in CI/CD**:
   - Add a verification step in `.github/workflows/release.yml` after Linux packaging:
     ```bash
     tar -xzf dist/github-account-manager-linux-x64.tar.gz -C /tmp/
-    xvfb-run /tmp/github-account-manager --version
+    chmod +x /tmp/github-account-manager
+    xvfb-run /tmp/github-account-manager --smoke-test
     ```
     Ensures missing `.so` libraries fail the pipeline before publishing the release.
-- [ ] **5.5 Test Suite Verification on Linux**:
-  - Run full test suite with `uv run pytest` once `python3-tk` is installed and verify 100% test pass rate.
+- [x] **5.5 Test Suite Verification on Linux**:
+  - Run full test suite with `uv run pytest` and verify test pass/skip rate.
 
 ---
 

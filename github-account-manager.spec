@@ -1,16 +1,56 @@
-# -*- mode: python ; coding: utf-8 -*-
+import glob
+import importlib.util
+import sys
 from pathlib import Path
-import customtkinter
 from PyInstaller.utils.hooks import collect_all
 
-ctk_path = str(Path(customtkinter.__file__).parent)
+ctk_spec = importlib.util.find_spec("customtkinter")
+ctk_path = str(ctk_spec.submodule_search_locations[0]) if (ctk_spec and ctk_spec.submodule_search_locations) else "customtkinter"
 datas = [(ctk_path, 'customtkinter'), ('assets', 'assets')]
 binaries = []
-hiddenimports = ['github_account_manager', 'github_account_manager.platform.windows', 'github_account_manager.platform.macos', 'github_account_manager.platform.linux']
+hiddenimports = [
+    'github_account_manager',
+    'github_account_manager.platform.windows',
+    'github_account_manager.platform.macos',
+    'github_account_manager.platform.linux',
+]
+runtime_hooks = []
+
 tmp_ret = collect_all('customtkinter')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('pydantic')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+
+if sys.platform.startswith("linux"):
+    linux_rthook = Path("packaging/hooks/pyi_rth_tcltk_linux.py").resolve()
+    if linux_rthook.exists():
+        runtime_hooks.append(str(linux_rthook))
+
+    # Collect shared libraries for Tcl/Tk and BLT
+    so_patterns = [
+        "/usr/lib*/**/libtcl8.6*.so*",
+        "/usr/lib*/**/libtk8.6*.so*",
+        "/usr/lib*/**/libBLT*.so*",
+    ]
+    seen_sos = set()
+    for pattern in so_patterns:
+        for so_path in glob.glob(pattern, recursive=True):
+            p = Path(so_path)
+            if p.name not in seen_sos:
+                seen_sos.add(p.name)
+                binaries.append((str(p), "."))
+
+    # Collect Tcl and Tk asset directories
+    tcl_share = Path("/usr/share/tcltk")
+    if tcl_share.exists():
+        for tcl_dir in tcl_share.glob("tcl8*"):
+            if tcl_dir.is_dir():
+                datas.append((str(tcl_dir), f"_tcl_data/{tcl_dir.name}"))
+                datas.append((str(tcl_dir), "_tcl_data"))
+        for tk_dir in tcl_share.glob("tk8*"):
+            if tk_dir.is_dir():
+                datas.append((str(tk_dir), f"_tk_data/{tk_dir.name}"))
+                datas.append((str(tk_dir), "_tk_data"))
 
 
 a = Analysis(
@@ -21,7 +61,7 @@ a = Analysis(
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=runtime_hooks,
     excludes=[],
     noarchive=False,
     optimize=0,

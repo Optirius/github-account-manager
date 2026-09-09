@@ -50,12 +50,22 @@ class App(ctk.CTk):
         self.configure(fg_color=BG_APP)
 
         # Set window icon if available
-        icon_path = ASSETS_DIR / "icon.ico"
-        if icon_path.exists() and sys.platform == "win32":
-            try:
-                self.iconbitmap(str(icon_path))
-            except Exception:
-                pass
+        if sys.platform == "win32":
+            icon_ico = ASSETS_DIR / "icon.ico"
+            if icon_ico.exists():
+                try:
+                    self.iconbitmap(str(icon_ico))
+                except Exception:
+                    pass
+        else:
+            icon_png = ASSETS_DIR / "icon.png"
+            if icon_png.exists():
+                try:
+                    from PIL import ImageTk
+                    self._window_icon_img = ImageTk.PhotoImage(file=str(icon_png))
+                    self.iconphoto(True, self._window_icon_img)
+                except Exception:
+                    pass
 
         self._toast_timer_id = None
         self._view_cache: Dict[str, ctk.CTkFrame] = {}
@@ -66,11 +76,24 @@ class App(ctk.CTk):
         # Background update check after app is rendered
         self.after(1500, self._check_updates_background)
 
-        # Force window to foreground
-        self.lift()
-        self.attributes("-topmost", True)
-        self.after_idle(lambda: self.attributes("-topmost", False))
-        self.focus_force()
+        # Force window to foreground safely (resilient to Wayland and tiling WMs)
+        try:
+            self.lift()
+            self.attributes("-topmost", True)
+            self.after_idle(self._clear_topmost)
+        except Exception:
+            pass
+
+        try:
+            self.focus_force()
+        except Exception:
+            pass
+
+    def _clear_topmost(self):
+        try:
+            self.attributes("-topmost", False)
+        except Exception:
+            pass
 
     def _build_text_logo(self, logo_box):
         title_lbl = ctk.CTkLabel(

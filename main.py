@@ -138,6 +138,14 @@ if __name__ == "__main__":
     log_debug("Calling multiprocessing.freeze_support()...")
     multiprocessing.freeze_support()
 
+    if "--version" in sys.argv or "--help" in sys.argv or "-h" in sys.argv:
+        try:
+            from github_account_manager.main import main
+            main(log_fn=log_debug)
+        except Exception:
+            pass
+        sys.exit(0)
+
     # Pre-flight check for Tkinter
     check_tkinter_or_exit()
 

@@ -1,5 +1,6 @@
 """Linux-specific Platform Adapter implementation."""
 import os
+import functools
 from pathlib import Path
 import re
 import shutil
@@ -382,5 +383,40 @@ class LinuxPlatformAdapter(PlatformAdapter):
     def get_default_data_dir(self) -> Path:
         return Path.home() / ".github_account_manager"
 
+    @functools.lru_cache(maxsize=1)
     def get_system_font_family(self) -> str:
+        """Return best available system font family on Linux."""
+        candidates = ["Ubuntu", "Inter", "Cantarell", "DejaVu Sans", "Liberation Sans", "Noto Sans"]
+        
+        # Try fc-list first for fast font discovery
+        try:
+            res = safe_subprocess_run(["fc-list", ":", "family"], capture_output=True, text=True, timeout=2)
+            if res.returncode == 0 and res.stdout:
+                families = set(line.strip().lower() for line in res.stdout.splitlines() if line.strip())
+                for c in candidates:
+                    if c.lower() in families:
+                        return c
+        except Exception:
+            pass
+
+        font_dirs = [
+            Path("/usr/share/fonts"),
+            Path("/usr/local/share/fonts"),
+            Path.home() / ".local" / "share" / "fonts",
+        ]
+        available_fonts = set()
+        for fdir in font_dirs:
+            if fdir.exists():
+                try:
+                    for f in fdir.glob("**/*"):
+                        if f.is_file() and f.suffix.lower() in [".ttf", ".otf"]:
+                            available_fonts.add(f.stem.lower())
+                except Exception:
+                    pass
+
+        for c in candidates:
+            c_clean = c.lower().replace(" ", "")
+            if any(c_clean in af.replace("-", "").replace("_", "") for af in available_fonts):
+                return c
+
         return "Ubuntu"
