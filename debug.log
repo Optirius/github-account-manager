@@ -1,0 +1,78 @@
+[2026-09-09 13:37:56.737] ==================================================
+[2026-09-09 13:37:56.741] === Process Started (PID: 15845) ===
+[2026-09-09 13:37:56.742] Executable: /home/optirius/Drive/Projects/github-account-manager/.venv/bin/python
+[2026-09-09 13:37:56.742] Working Directory: /home/optirius/Drive/Projects/github-account-manager
+[2026-09-09 13:37:56.743] App Directory: /home/optirius/Drive/Projects/github-account-manager
+[2026-09-09 13:37:56.747] Frozen: False
+[2026-09-09 13:37:56.749] Python: 3.12.3 (main, Jul 15 2026, 23:46:41) [GCC 13.3.0]
+[2026-09-09 13:37:56.750] Arguments: ['main.py']
+[2026-09-09 13:37:56.751] Calling multiprocessing.freeze_support()...
+[2026-09-09 13:37:56.753] freeze_support() passed. Importing github_account_manager.main...
+[2026-09-09 13:37:56.950] [FATAL_STARTUP_ERROR]
+Traceback (most recent call last):
+  File "/home/optirius/Drive/Projects/github-account-manager/main.py", line 89, in <module>
+    from github_account_manager.main import main
+  File "/home/optirius/Drive/Projects/github-account-manager/src/github_account_manager/main.py", line 11, in <module>
+    import tkinter as tk
+ModuleNotFoundError: No module named 'tkinter'
+
+[2026-09-09 13:37:56.953] [CRITICAL_UNCAUGHT_EXCEPTION]
+Traceback (most recent call last):
+  File "/home/optirius/Drive/Projects/github-account-manager/main.py", line 89, in <module>
+    from github_account_manager.main import main
+  File "/home/optirius/Drive/Projects/github-account-manager/src/github_account_manager/main.py", line 11, in <module>
+    import tkinter as tk
+ModuleNotFoundError: No module named 'tkinter'
+
+[2026-09-09 13:37:56.954] Failed to display messagebox: No module named 'tkinter'
+[2026-09-09 13:43:24.655] ==================================================
+[2026-09-09 13:43:24.657] === Process Started (PID: 17342) ===
+[2026-09-09 13:43:24.658] Executable: /home/optirius/Drive/Projects/github-account-manager/.venv/bin/python
+[2026-09-09 13:43:24.658] Working Directory: /home/optirius/Drive/Projects/github-account-manager
+[2026-09-09 13:43:24.659] App Directory: /home/optirius/Drive/Projects/github-account-manager
+[2026-09-09 13:43:24.659] Frozen: False
+[2026-09-09 13:43:24.660] Python: 3.12.3 (main, Jul 15 2026, 23:46:41) [GCC 13.3.0]
+[2026-09-09 13:43:24.660] Arguments: ['main.py']
+[2026-09-09 13:43:24.661] Calling multiprocessing.freeze_support()...
+[2026-09-09 13:43:24.661] freeze_support() passed. Importing github_account_manager.main...
+[2026-09-09 13:43:24.785] [FATAL_STARTUP_ERROR]
+Traceback (most recent call last):
+  File "/home/optirius/Drive/Projects/github-account-manager/main.py", line 89, in <module>
+    from github_account_manager.main import main
+  File "/home/optirius/Drive/Projects/github-account-manager/src/github_account_manager/main.py", line 11, in <module>
+    import tkinter as tk
+ModuleNotFoundError: No module named 'tkinter'
+
+[2026-09-09 13:43:24.789] [CRITICAL_UNCAUGHT_EXCEPTION]
+Traceback (most recent call last):
+  File "/home/optirius/Drive/Projects/github-account-manager/main.py", line 89, in <module>
+    from github_account_manager.main import main
+  File "/home/optirius/Drive/Projects/github-account-manager/src/github_account_manager/main.py", line 11, in <module>
+    import tkinter as tk
+ModuleNotFoundError: No module named 'tkinter'
+
+[2026-09-09 13:43:24.792] Failed to display messagebox: No module named 'tkinter'
+[2026-09-09 14:12:07.162] ==================================================
+[2026-09-09 14:12:07.163] === Process Started (PID: 21127) ===
+[2026-09-09 14:12:07.163] Executable: /home/optirius/Drive/Projects/github-account-manager/.venv/bin/python
+[2026-09-09 14:12:07.164] Working Directory: /home/optirius/Drive/Projects/github-account-manager
+[2026-09-09 14:12:07.164] App Directory: /home/optirius/Drive/Projects/github-account-manager
+[2026-09-09 14:12:07.165] Frozen: False
+[2026-09-09 14:12:07.165] Python: 3.12.3 (main, Jul 15 2026, 23:46:41) [GCC 13.3.0]
+[2026-09-09 14:12:07.166] Arguments: ['main.py']
+[2026-09-09 14:12:07.167] Calling multiprocessing.freeze_support()...
+[2026-09-09 14:12:07.168] 
+======================================================================
+[ERROR] Python Tkinter is not installed on this system!
+----------------------------------------------------------------------
+The application GUI requires Tkinter to run.
+Please install Tkinter using your Linux distribution's package manager:
+
+  • Ubuntu / Debian / Linux Mint:  sudo apt install -y python3-tk
+  • Fedora / RHEL / CentOS:       sudo dnf install -y python3-tkinter
+  • Arch Linux / Manjaro:         sudo pacman -S tk
+  • openSUSE:                      sudo zypper install python3-tk
+
+After installing, please relaunch the application.
+======================================================================
+
