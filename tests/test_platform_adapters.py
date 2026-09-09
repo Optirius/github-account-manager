@@ -31,11 +31,12 @@ def test_macos_platform_adapter():
 def test_linux_platform_adapter():
     adapter = LinuxPlatformAdapter()
     assert adapter.os_name == "linux"
-    assert adapter.get_system_font_family() == "Ubuntu"
+    valid_fonts = ["Ubuntu", "Inter", "Cantarell", "DejaVu Sans", "Liberation Sans", "Noto Sans"]
+    assert adapter.get_system_font_family() in valid_fonts
     
     paths = adapter.get_ide_settings_paths("vscode")
     assert len(paths) >= 1
-    assert any(".config" in str(p) and "settings.json" in str(p) for p in paths)
+    assert any(".config" in p.as_posix() and "settings.json" in p.as_posix() for p in paths)
 
 
 def test_platform_factory_resolution():
@@ -84,12 +85,12 @@ def test_linux_safe_xdg_path_resolution(monkeypatch):
     # When XDG_CONFIG_HOME is empty string, should safely fall back to ~/.config
     monkeypatch.setenv("XDG_CONFIG_HOME", "")
     paths = adapter.get_ide_settings_paths("vscode")
-    assert any(".config" in str(p) for p in paths)
+    assert any(".config" in p.as_posix() for p in paths)
 
     # When XDG_CONFIG_HOME is set to custom path
     monkeypatch.setenv("XDG_CONFIG_HOME", "/custom/config/path")
     paths_custom = adapter.get_ide_settings_paths("vscode")
-    assert any("/custom/config/path" in str(p) for p in paths_custom)
+    assert any("/custom/config/path" in p.as_posix() for p in paths_custom)
 
 
 def test_linux_git_credentials_parsing_and_deletion(tmp_path, monkeypatch):

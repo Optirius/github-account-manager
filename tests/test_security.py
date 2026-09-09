@@ -71,8 +71,12 @@ def test_keyring_service_fallback_roundtrip(tmp_path, monkeypatch):
     def failing_get_password(*args, **kwargs):
         return None
 
+    def failing_delete_password(*args, **kwargs):
+        raise RuntimeError("Keyring daemon simulated failure")
+
     monkeypatch.setattr(keyring, "set_password", failing_set_password)
     monkeypatch.setattr(keyring, "get_password", failing_get_password)
+    monkeypatch.setattr(keyring, "delete_password", failing_delete_password)
 
     service = KeyringService(service_name="test-service")
     service.fallback_file = tmp_path / ".vault.dat"

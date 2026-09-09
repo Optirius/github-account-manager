@@ -103,24 +103,90 @@ class LinuxVaultFallback:
         return base64.urlsafe_b64encode(derived)
 
     @classmethod
+    def _stdlib_encrypt(cls, data_str: str) -> str:
+        import hmac
+        import hashlib
+        import secrets
+
+        raw_data = data_str.encode("utf-8")
+        key = cls._get_key()
+        nonce = secrets.token_bytes(16)
+
+        keystream = bytearray()
+        counter = 0
+        while len(keystream) < len(raw_data):
+            block = hmac.new(key, nonce + counter.to_bytes(4, "big"), hashlib.sha256).digest()
+            keystream.extend(block)
+            counter += 1
+
+        ciphertext = bytes(a ^ b for a, b in zip(raw_data, keystream[:len(raw_data)]))
+        tag = hmac.new(key, b"v1:" + nonce + ciphertext, hashlib.sha256).digest()[:16]
+        payload = b"v1:" + nonce + tag + ciphertext
+        return base64.urlsafe_b64encode(payload).decode("utf-8")
+
+    @classmethod
+    def _stdlib_decrypt(cls, enc_str: str) -> Optional[str]:
+        import hmac
+        import hashlib
+
+        try:
+            payload = base64.urlsafe_b64decode(enc_str.encode("utf-8"))
+            if not payload.startswith(b"v1:"):
+                return None
+            body = payload[3:]
+            if len(body) < 32:
+                return None
+            nonce = body[:16]
+            tag = body[16:32]
+            ciphertext = body[32:]
+
+            key = cls._get_key()
+            expected_tag = hmac.new(key, b"v1:" + nonce + ciphertext, hashlib.sha256).digest()[:16]
+            if not hmac.compare_digest(tag, expected_tag):
+                return None
+
+            keystream = bytearray()
+            counter = 0
+            while len(keystream) < len(ciphertext):
+                block = hmac.new(key, nonce + counter.to_bytes(4, "big"), hashlib.sha256).digest()
+                keystream.extend(block)
+                counter += 1
+
+            plaintext = bytes(a ^ b for a, b in zip(ciphertext, keystream[:len(ciphertext)]))
+            return plaintext.decode("utf-8")
+        except Exception:
+            return None
+
+    @classmethod
     def encrypt(cls, data_str: str) -> Optional[str]:
         try:
             from cryptography.fernet import Fernet
             f = Fernet(cls._get_key())
             return f.encrypt(data_str.encode("utf-8")).decode("utf-8")
         except Exception as e:
-            logger.debug(f"Local vault encrypt failed: {e}")
-            return None
+            logger.debug(f"Fernet encrypt unavailable or failed, falling back to stdlib: {e}")
+            try:
+                return cls._stdlib_encrypt(data_str)
+            except Exception as ex:
+                logger.debug(f"Local vault encrypt failed: {ex}")
+                return None
 
     @classmethod
     def decrypt(cls, enc_str: str) -> Optional[str]:
+        try:
+            raw = base64.urlsafe_b64decode(enc_str.encode("utf-8"))
+            if raw.startswith(b"v1:"):
+                return cls._stdlib_decrypt(enc_str)
+        except Exception:
+            pass
+
         try:
             from cryptography.fernet import Fernet
             f = Fernet(cls._get_key())
             return f.decrypt(enc_str.encode("utf-8")).decode("utf-8")
         except Exception as e:
-            logger.debug(f"Local vault decrypt failed: {e}")
-            return None
+            logger.debug(f"Fernet decrypt failed: {e}")
+            return cls._stdlib_decrypt(enc_str)
 
 
 class KeyringService:
@@ -161,17 +227,17 @@ class KeyringService:
         if not account_id:
             return False
 
-        success = True
+        keyring_deleted = False
         try:
             keyring.delete_password(self.service_name, account_id)
+            keyring_deleted = True
         except keyring.errors.PasswordDeleteError:
-            pass
+            keyring_deleted = True
         except Exception as e:
             logger.debug(f"Keyring delete failed: {e}")
-            success = False
 
-        self._delete_fallback(account_id)
-        return success
+        fallback_deleted = self._delete_fallback(account_id)
+        return keyring_deleted or fallback_deleted
 
     # --- Secure Fallback Helpers ---
 
@@ -204,11 +270,12 @@ class KeyringService:
 
         return None
 
-    def _delete_fallback(self, account_id: str) -> None:
+    def _delete_fallback(self, account_id: str) -> bool:
         vault = self._read_vault()
         if account_id in vault:
             del vault[account_id]
-            self._write_vault(vault)
+            return self._write_vault(vault)
+        return False
 
     def _read_vault(self) -> dict:
         if self.fallback_file.exists():
